@@ -329,7 +329,7 @@ class Helper:
                     self.logger.error(f"Error sending error report: {e}")
                     self.has_errors = True
             else:
-                self.logger.debug("No errors to report")
+                self.logger.error("No SMTP server specified")
+                self.has_errors = True
         else:
-            self.logger.error("No SMTP server specified")
-            self.has_errors = True
+            self.logger.debug("No errors to report")
