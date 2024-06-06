@@ -1,13 +1,13 @@
 import acme_powerschool
 import pandas as pd
 import logging
-from io import StringIO
 import smtplib
+from io import StringIO
 from email.utils import formataddr
 from email.message import EmailMessage
 
 
-class DataFlowHelper:
+class PSHelper:
     def __init__(self, server_url, script_name, plugin, debug=False):
         self._script_name = script_name
         self.debug = debug
@@ -230,6 +230,10 @@ class DataFlowHelper:
         else:
             self.logger.error(f"Records not updated in {table_name} because the API is not connected")
             self.has_errors = True
+
+    # Set the SMTP server for sending emails
+    def set_smtp_server(self, smtp_server):
+        self._smtp_server = smtp_server
 
     # Set the recipients for the report email
     def set_report_recipients(self, recipients):
