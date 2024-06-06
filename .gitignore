@@ -86,4 +86,4 @@ fabric.properties
 # Build directories
 /build/
 /dist/
-/powerschool_data_helper.egg-info/
+/psdatahelper.egg-info/

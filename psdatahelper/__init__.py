@@ -7,7 +7,7 @@ from email.utils import formataddr
 from email.message import EmailMessage
 
 
-class PSHelper:
+class Helper:
     def __init__(self, server_url, script_name, plugin, debug=False):
         self._script_name = script_name
         self.debug = debug
@@ -234,6 +234,22 @@ class PSHelper:
     # Set the SMTP server for sending emails
     def set_smtp_server(self, smtp_server):
         self._smtp_server = smtp_server
+
+    # Set the sender address for the report email
+    def set_report_sender_address(self, sender_address):
+        self._report_email_header['sender_address'] = sender_address
+
+    # Set the sender name for the report email
+    def set_report_sender_name(self, sender_name):
+        self._report_email_header['sender_name'] = sender_name
+
+    # Set the sender address for the error email
+    def set_error_sender_address(self, sender_address):
+        self._error_email_header['sender_address'] = sender_address
+
+    # Set the sender name for the error email
+    def set_error_sender_name(self, sender_name):
+        self._error_email_header['sender_name'] = sender_name
 
     # Set the recipients for the report email
     def set_report_recipients(self, recipients):
