@@ -102,7 +102,7 @@ class Helper:
 
                 # If the response contains records
                 if 'record' in response_json:
-                    self.logger.debug(f"Records found: {len(response_json['record'])} records")
+                    self.logger.debug(f"Records found: {len(response_json['record'])} record(s)")
 
                     # Return the records as a pandas DataFrame
                     return pd.DataFrame(response_json['record'])
@@ -159,7 +159,7 @@ class Helper:
                                                                                                       justify='left')}")
                     self.has_errors = True
                 else:
-                    self.logger.debug(f"Records inserted into {table_name}")
+                    self.logger.debug(f"Records successfully inserted into {table_name}")
         else:
             self.logger.error(f"Records not inserted into {table_name} because the API is not connected")
             self.has_errors = True
@@ -221,7 +221,7 @@ class Helper:
                                     f"{errors.to_string(index=False, justify='left')}")
                             self.has_errors = True
                         else:
-                            self.logger.debug(f"Records updated in {table_name}")
+                            self.logger.debug(f"Records successfully updated in {table_name}")
                     else:
                         self.logger.debug(f"Records updated in {table_name}")
                 # If the specified ID column is not in the records DataFrame, log an error
@@ -298,6 +298,8 @@ class Helper:
             except Exception as e:
                 self.logger.error(f"Error sending report: {e}")
                 self.has_errors = True
+            else:
+                self.logger.debug("Report sent successfully")
         else:
             self.logger.error("No SMTP server specified")
             self.has_errors = True
@@ -329,6 +331,8 @@ class Helper:
                 except Exception as e:
                     self.logger.error(f"Error sending error report: {e}")
                     self.has_errors = True
+                else:
+                    self.logger.debug("Error report sent successfully")
             else:
                 self.logger.error("No SMTP server specified")
                 self.has_errors = True
