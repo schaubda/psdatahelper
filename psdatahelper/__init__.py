@@ -2,6 +2,7 @@ import acme_powerschool
 import pandas as pd
 import logging
 import smtplib
+import json
 from io import StringIO
 from email.utils import formataddr
 from email.message import EmailMessage
@@ -101,7 +102,8 @@ class Helper:
 
                 # If the response contains records
                 if 'record' in response_json:
-                    self.logger.debug(f"Records found: {response_json['record']}")
+                    response_dict = json.loads(response_json)
+                    self.logger.debug(f"Records found: {len(response_dict['record'])} records")
 
                     # Return the records as a pandas DataFrame
                     return pd.DataFrame(response_json['record'])
