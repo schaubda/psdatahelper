@@ -85,7 +85,7 @@ class Helper:
             self.logger.debug(f"Connected to the PowerSchool API")
             self._api_connected = True
 
-    # Define a method to run a PowerQuery and return the results as a pandas DataFrame
+    # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name):
         if self._api_connected:
             self.logger.debug(f"Running PQ: {pq_name}")
@@ -123,7 +123,7 @@ class Helper:
             self.logger.error(f"PowerQuery {pq_name} not run because the API is not connected")
             self.has_errors = True
 
-    # Define a method to insert records into a table
+    # Insert records contained in the given Pandas DataFrame into the given table
     def insert_table_records(self, table_name, records):
         if self._api_connected:
             self.logger.debug(f"Inserting records into {table_name}")
@@ -164,7 +164,7 @@ class Helper:
             self.logger.error(f"Records not inserted into {table_name} because the API is not connected")
             self.has_errors = True
 
-    # Define a method to update records in a table
+    # Update records contained in the given Pandas DataFrame in the given table
     def update_table_records(self, table_name, id_column_name, records):
         if self._api_connected:
             self.logger.debug(f"Updating records in {table_name}")
@@ -230,6 +230,68 @@ class Helper:
                     self.has_errors = True
         else:
             self.logger.error(f"Records not updated in {table_name} because the API is not connected")
+            self.has_errors = True
+
+    # Delete a record with the given ID from the given table
+
+    def delete_table_record(self, table_name, record_id):
+        if self._api_connected:
+            self.logger.debug(f"Deleting record from {table_name}")
+
+            # Send a DELETE request to remove the record
+            response = self._ps.delete(f'ws/schema/table/{table_name}/{record_id}')
+
+            if response.status_code == 204:
+                self.logger.debug(f"Record successfully deleted from {table_name}")
+                return True
+            else:
+                if response.status_code == 404:
+                    self.logger.debug(f"Record {record_id} not found in {table_name}")
+                    return True
+                else:
+                    self.logger.error(f"Error deleting record from {table_name}: {response.status_code} - {response.text}")
+                    self.has_errors = True
+                return False
+        else:
+            self.logger.error(f"Record {record_id} not deleted from {table_name} because the API is not connected")
+            self.has_errors = True
+            return False
+
+    # Delete records contained in the given Pandas DataFrame from the given table
+    def delete_table_records(self, table_name, id_column_name, records):
+        if self._api_connected:
+            self.logger.debug(f"Deleting records from {table_name}")
+
+            if not records.empty:
+                # Function to delete a single record
+                def delete_records(row):
+                    response = self._ps.delete(f'ws/schema/table/{table_name}/{row[id_column_name]}')
+
+                    row['response_status_code'] = response.status_code
+                    row['response_text'] = response.text
+
+                    return row
+
+                # Apply the delete_records function to each row in the DataFrame
+                results = records.apply(delete_records, axis=1)
+
+                # Separate errors into failed deletions and not found records
+                errors = results.loc[results['response_status_code'] != 204]
+                failed = errors.loc[errors['response_status_code'] != 404]
+                not_found = errors.loc[errors['response_status_code'] == 404]
+
+                if not failed.empty:
+                    self.logger.error(
+                        f"Errors deleting records from {table_name}\n{failed.to_string(index=False, justify='left')}")
+                    self.has_errors = True
+
+                if not not_found.empty:
+                    self.logger.debug(
+                        f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
+            else:
+                self.logger.debug(f"Input records DataFrame is empty")
+        else:
+            self.logger.error(f"Records not deleted from {table_name} because the API is not connected")
             self.has_errors = True
 
     # Set the SMTP server for sending emails
