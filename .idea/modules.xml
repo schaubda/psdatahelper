@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/powerschool-data-helper.iml" filepath="$PROJECT_DIR$/.idea/powerschool-data-helper.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/psdatahelper.iml" filepath="$PROJECT_DIR$/.idea/psdatahelper.iml" />
     </modules>
   </component>
 </project>

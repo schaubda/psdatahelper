@@ -102,8 +102,7 @@ class Helper:
 
                 # If the response contains records
                 if 'record' in response_json:
-                    response_dict = json.loads(response_json)
-                    self.logger.debug(f"Records found: {len(response_dict['record'])} records")
+                    self.logger.debug(f"Records found: {len(response_json['record'])} records")
 
                     # Return the records as a pandas DataFrame
                     return pd.DataFrame(response_json['record'])
