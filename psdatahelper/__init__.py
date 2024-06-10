@@ -2,7 +2,6 @@ import acme_powerschool
 import pandas as pd
 import logging
 import smtplib
-import json
 from io import StringIO
 from email.utils import formataddr
 from email.message import EmailMessage
