@@ -291,14 +291,16 @@ class Helper:
                 failed = errors.loc[errors['response_status_code'] != 404]
                 not_found = errors.loc[errors['response_status_code'] == 404]
 
+                if not not_found.empty:
+                    self.logger.debug(
+                        f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
+
                 if not failed.empty:
                     self.logger.error(
                         f"Errors deleting records from {table_name}\n{failed.to_string(index=False, justify='left')}")
                     self.has_errors = True
-
-                if not not_found.empty:
-                    self.logger.debug(
-                        f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
+                else:
+                    self.logger.debug(f"Records successfully deleted from {table_name}")
             else:
                 self.logger.debug(f"Input records DataFrame is empty")
         else:
