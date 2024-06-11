@@ -171,9 +171,17 @@ class Helper:
                     self.has_errors = True
                 else:
                     self.logger.debug(f"Records successfully inserted into {table_name}")
+
+                return results
+            else:
+                self.logger.debug(f"Input records DataFrame is empty")
+
+                return pd.DataFrame()
         else:
             self.logger.error(f"Records not inserted into {table_name} because the API is not connected")
             self.has_errors = True
+
+            return pd.DataFrame()
 
     # Update records contained in the given Pandas DataFrame in the given table
     def update_table_records(self, table_name, id_column_name, records):
@@ -233,18 +241,29 @@ class Helper:
                             self.has_errors = True
                         else:
                             self.logger.debug(f"Records successfully updated in {table_name}")
+
+                        return results
                     else:
-                        self.logger.debug(f"Records updated in {table_name}")
+                        self.logger.debug(f"Records successfully updated in {table_name}")
+
+                        return results
                 # If the specified ID column is not in the records DataFrame, log an error
                 else:
                     self.logger.error(f"ID column '{id_column_name}' not found in records")
                     self.has_errors = True
+
+                    return pd.DataFrame()
+            else:
+                self.logger.debug(f"Input records DataFrame is empty")
+
+                return pd.DataFrame()
         else:
             self.logger.error(f"Records not updated in {table_name} because the API is not connected")
             self.has_errors = True
 
-    # Delete a record with the given ID from the given table
+            return pd.DataFrame()
 
+    # Delete a record with the given ID from the given table
     def delete_table_record(self, table_name, record_id):
         if self._api_connected:
             self.logger.debug(f"Deleting record from {table_name}")
@@ -301,11 +320,17 @@ class Helper:
                     self.has_errors = True
                 else:
                     self.logger.debug(f"Records successfully deleted from {table_name}")
+
+                return results
             else:
                 self.logger.debug(f"Input records DataFrame is empty")
+
+                return pd.DataFrame()
         else:
             self.logger.error(f"Records not deleted from {table_name} because the API is not connected")
             self.has_errors = True
+
+            return pd.DataFrame()
 
     # Set the SMTP server for sending emails
     def set_smtp_server(self, smtp_server):
