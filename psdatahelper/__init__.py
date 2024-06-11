@@ -92,10 +92,17 @@ class Helper:
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name):
         if self._api_connected:
-            self.logger.debug(f"Running PQ: {self._pq_prefix}{pq_name}")
+            full_pq_name = ''
+
+            if self._pq_prefix != '':
+                full_pq_name = f"{self._pq_prefix}.{pq_name}"
+            else:
+                full_pq_name = pq_name
+
+            self.logger.debug(f"Running PQ: {full_pq_name}")
 
             # Send a POST request to run the PQ
-            response = self._ps.post(f'ws/schema/query/{self._pq_prefix}{pq_name}?pagesize=0')
+            response = self._ps.post(f'ws/schema/query/{full_pq_name}?pagesize=0')
 
             # If the request was successful
             if response.status_code == 200:
