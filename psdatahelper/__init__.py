@@ -13,6 +13,7 @@ class Helper:
         self.debug = debug
         self.has_errors = False
         self._api_connected = False
+        self._pq_prefix = ''
         # Initialize a dictionary for report email header
         self._report_email_header = {
             'sender_address': '',
@@ -84,13 +85,17 @@ class Helper:
             self.logger.debug(f"Connected to the PowerSchool API")
             self._api_connected = True
 
+    # Set the prefix for PowerQueries
+    def set_pq_prefix(self, pq_prefix):
+        self._pq_prefix = pq_prefix
+
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name):
         if self._api_connected:
-            self.logger.debug(f"Running PQ: {pq_name}")
+            self.logger.debug(f"Running PQ: {self._pq_prefix}{pq_name}")
 
             # Send a POST request to run the PQ
-            response = self._ps.post(f'ws/schema/query/{pq_name}?pagesize=0')
+            response = self._ps.post(f'ws/schema/query/{self._pq_prefix}{pq_name}?pagesize=0')
 
             # If the request was successful
             if response.status_code == 200:
