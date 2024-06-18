@@ -1,0 +1,121 @@
+import logging
+import smtplib
+from io import StringIO
+from email.utils import formataddr
+from email.message import EmailMessage
+
+
+class Log:
+    def __init__(self, log_file_name: str, debug=False):
+        self._file_name = log_file_name
+        self._debug = debug
+
+        self.has_errors = False
+        self.text = StringIO()
+
+        self._logger = logging.getLogger(log_file_name)
+
+        self._formatter = logging.Formatter("{levelname}: {asctime} - {message}", style="{",
+                                            datefmt="%b %d %Y %I:%M:%S %p")
+        self._file_handler = logging.FileHandler(f"{self._file_name}", mode="a")
+        self._text_handler = logging.StreamHandler(stream=self.text)
+
+        self._logger.propagate = False
+
+        if self._logger.hasHandlers():
+            self._logger.handlers.clear()
+
+        if self._debug:
+            self._logger.setLevel(logging.DEBUG)
+            self._file_handler.setLevel(logging.DEBUG)
+            self._text_handler.setLevel(logging.DEBUG)
+
+            self._console_handler = logging.StreamHandler()
+            self._console_handler.setLevel(logging.DEBUG)
+            self._console_handler.setFormatter(self._formatter)
+            self._logger.addHandler(self._console_handler)
+        else:
+            self._logger.setLevel(logging.ERROR)
+            self._file_handler.setLevel(logging.ERROR)
+            self._text_handler.setLevel(logging.ERROR)
+
+        self._file_handler.setFormatter(self._formatter)
+        self._text_handler.setFormatter(self._formatter)
+
+        self._logger.addHandler(self._file_handler)
+        self._logger.addHandler(self._text_handler)
+
+        self._smtp_server = ''
+        self._email_header = {
+            'sender_address': '',
+            'sender_name': '',
+            'recipients': ''
+        }
+
+    def set_email_config(self, smtp_server: str, sender_address: str, sender_name: str, recipients: str):
+        self._smtp_server = smtp_server
+        self._email_header['sender_address'] = sender_address
+        self._email_header['sender_name'] = sender_name
+        self._email_header['recipients'] = recipients
+
+    def set_formatter(self, formatter: logging.Formatter):
+        self._formatter = formatter
+        self._file_handler.setFormatter(self._formatter)
+        self._text_handler.setFormatter(self._formatter)
+
+        if self._debug:
+            self._console_handler.setFormatter(self._formatter)
+
+    def debug(self, msg: object, *args, **kwargs):
+        self._logger.debug(msg, *args, **kwargs)
+
+    def info(self, msg: object, *args, **kwargs):
+        self._logger.info(msg, *args, **kwargs)
+
+    def warning(self, msg: object, *args, **kwargs):
+        self._logger.warning(msg, *args, **kwargs)
+
+    def error(self, msg: object, *args, **kwargs):
+        self._logger.error(msg, *args, **kwargs)
+        self.has_errors = True
+
+    def critical(self, msg: object, *args, **kwargs):
+        self._logger.critical(msg, *args, **kwargs)
+        self.has_errors = True
+
+    def log(self, level, msg: object, *args, **kwargs):
+        self._logger.log(level, msg, *args, **kwargs)
+
+    def exception(self, msg: object, *args, **kwargs):
+        self._logger.exception(msg, *args, **kwargs)
+        self.has_errors = True
+
+    def send_error_report(self):
+        if self.has_errors:
+            if self._smtp_server != '':
+                self._logger.debug("Sending error report")
+
+                # Create a new EmailMessage object
+                msg = EmailMessage()
+
+                # Set the From, To, and Subject headers, and the message body
+                msg['From'] = formataddr(
+                        (self._email_header['sender_name'], self._email_header['sender_address']))
+                msg['To'] = self._email_header['recipients']
+                msg['Subject'] = f"Error Report for {self._file_name}"
+                msg.set_content(self.text.getvalue())
+
+                try:
+                    # Send the email using SMTP
+                    with smtplib.SMTP(self._smtp_server) as s:
+                        s.send_message(msg)
+                except Exception as e:
+                    self._logger.error(f"Error sending error report: {e}")
+                    self.has_errors = True
+                else:
+                    self._logger.debug("Error report sent successfully")
+            else:
+                self._logger.error("No SMTP server specified")
+                self.has_errors = True
+        else:
+            self._logger.debug("No errors to report")
