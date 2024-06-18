@@ -7,7 +7,7 @@ from email.message import EmailMessage
 
 class Log:
     def __init__(self, log_file_name: str, debug=False):
-        self._file_name = log_file_name
+        self._file_name = f'{log_file_name}.log'
         self._debug = debug
 
         self.has_errors = False
