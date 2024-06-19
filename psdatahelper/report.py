@@ -48,7 +48,7 @@ class Report:
 
         self._log.debug(f"Attachment added.\n\tAttachment: {attachment}")
 
-    def send(self):
+    def send_email(self):
         bad_settings = False
 
         for setting_name, setting_value in self._email_settings.items():
