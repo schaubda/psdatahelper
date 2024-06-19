@@ -139,7 +139,6 @@ class API:
                 if id_column_name in records.columns:
                     # Function to update a single record
                     def update_records(row):
-                        row_id = row[id_column_name]
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
                         response = self._ps.put(f'ws/schema/table/{table_name}/{row[id_column_name]}', data=payload)
@@ -154,44 +153,15 @@ class API:
                     # Get the rows where the response status code is not 200 (success)
                     errors = results.loc[results['response_status_code'] != 200]
 
-                    # If there are errors, fall back to deleting the rows first then re-inserting them with updated data
+                    # If there are errors, log them
                     if not errors.empty:
-                        # Function to update a single record with delete and insert
-                        # def update_records_with_delete(row):
-                        #     delete_response = self._ps.delete(f'ws/schema/table/{table_name}/{row[id_column_name]}')
-                        #
-                        #     if delete_response.status_code == 204 or delete_response.status_code == 404:
-                        #         row_json = row.dropna().to_json()
-                        #         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
-                        #         response = self._ps.post(f'ws/schema/table/{table_name}', data=payload)
-                        #
-                        #         row['response_status_code'] = response.status_code
-                        #         row['response_text'] = response.text
-                        #     else:
-                        #         row['response_status_code'] = delete_response.status_code
-                        #         row['response_text'] = delete_response.text
-                        #
-                        #     return row
-                        #
-                        # # Drop the response columns from the errors DataFrame
-                        # errors = errors.drop(columns=['response_status_code', 'response_text'])
-                        # # Apply the update_records_with_delete function to each row in the errors DataFrame
-                        # results = errors.apply(update_records_with_delete, axis=1)
-                        # errors = results.loc[results['response_status_code'] != 200]
-
-                        # If there are still errors, log them
-                        if not errors.empty:
-                            self._log.error(
-                                    f"Errors updating records in {table_name}\n"
-                                    f"{errors.to_string(index=False, justify='left')}")
-                        else:
-                            self._log.debug(f"Records successfully updated in {table_name}")
-
-                        return results
+                        self._log.error(
+                                f"Errors updating records in {table_name}\n"
+                                f"{errors.to_string(index=False, justify='left')}")
                     else:
                         self._log.debug(f"Records successfully updated in {table_name}")
 
-                        return results
+                    return results
                 # If the specified ID column is not in the records DataFrame, log an error
                 else:
                     self._log.error(f"ID column '{id_column_name}' not found in records")
