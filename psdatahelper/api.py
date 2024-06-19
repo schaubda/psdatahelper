@@ -36,7 +36,7 @@ class API:
         self._pq_prefix = pq_prefix
 
     # Run the given PowerQuery and return the results as a Pandas DataFrame
-    def run_pq(self, pq_name: str):
+    def run_pq(self, pq_name: str) -> pd.DataFrame:
         if self._api_connected:
             full_pq_name = ''
 
@@ -79,7 +79,7 @@ class API:
             self._log.error(f"PowerQuery {pq_name} not run because the API is not connected")
 
     # Insert records contained in the given Pandas DataFrame into the given table
-    def insert_table_records(self, table_name, records):
+    def insert_table_records(self, table_name, records) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Inserting records into {table_name}")
 
@@ -126,9 +126,11 @@ class API:
             return pd.DataFrame()
 
     # Update records contained in the given Pandas DataFrame in the given table
-    def update_table_records(self, table_name, id_column_name, records):
+    def update_table_records(self, table_name, id_column_name, records) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Updating records in {table_name}")
+
+            records = records.fillna('')
 
             # If the records DataFrame is not empty
             if not records.empty:
@@ -153,27 +155,27 @@ class API:
                     # If there are errors, fall back to deleting the rows first then re-inserting them with updated data
                     if not errors.empty:
                         # Function to update a single record with delete and insert
-                        def update_records_with_delete(row):
-                            delete_response = self._ps.delete(f'ws/schema/table/{table_name}/{row[id_column_name]}')
-
-                            if delete_response.status_code == 204 or delete_response.status_code == 404:
-                                row_json = row.dropna().to_json()
-                                payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
-                                response = self._ps.post(f'ws/schema/table/{table_name}', data=payload)
-
-                                row['response_status_code'] = response.status_code
-                                row['response_text'] = response.text
-                            else:
-                                row['response_status_code'] = delete_response.status_code
-                                row['response_text'] = delete_response.text
-
-                            return row
-
-                        # Drop the response columns from the errors DataFrame
-                        errors = errors.drop(columns=['response_status_code', 'response_text'])
-                        # Apply the update_records_with_delete function to each row in the errors DataFrame
-                        results = errors.apply(update_records_with_delete, axis=1)
-                        errors = results.loc[results['response_status_code'] != 200]
+                        # def update_records_with_delete(row):
+                        #     delete_response = self._ps.delete(f'ws/schema/table/{table_name}/{row[id_column_name]}')
+                        #
+                        #     if delete_response.status_code == 204 or delete_response.status_code == 404:
+                        #         row_json = row.dropna().to_json()
+                        #         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
+                        #         response = self._ps.post(f'ws/schema/table/{table_name}', data=payload)
+                        #
+                        #         row['response_status_code'] = response.status_code
+                        #         row['response_text'] = response.text
+                        #     else:
+                        #         row['response_status_code'] = delete_response.status_code
+                        #         row['response_text'] = delete_response.text
+                        #
+                        #     return row
+                        #
+                        # # Drop the response columns from the errors DataFrame
+                        # errors = errors.drop(columns=['response_status_code', 'response_text'])
+                        # # Apply the update_records_with_delete function to each row in the errors DataFrame
+                        # results = errors.apply(update_records_with_delete, axis=1)
+                        # errors = results.loc[results['response_status_code'] != 200]
 
                         # If there are still errors, log them
                         if not errors.empty:
@@ -203,7 +205,7 @@ class API:
             return pd.DataFrame()
 
     # Delete a record with the given ID from the given table
-    def delete_table_record(self, table_name, record_id):
+    def delete_table_record(self, table_name, record_id) -> bool:
         if self._api_connected:
             self._log.debug(f"Deleting record from {table_name}")
 
@@ -229,7 +231,7 @@ class API:
             return False
 
     # Delete records contained in the given Pandas DataFrame from the given table
-    def delete_table_records(self, table_name, id_column_name, records):
+    def delete_table_records(self, table_name, id_column_name, records) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Deleting records from {table_name}")
 
