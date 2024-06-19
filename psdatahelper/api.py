@@ -139,7 +139,8 @@ class API:
                 if id_column_name in records.columns:
                     # Function to update a single record
                     def update_records(row):
-                        row_json = row.dropna().to_json()
+                        row_id = row[id_column_name]
+                        row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
                         response = self._ps.put(f'ws/schema/table/{table_name}/{row[id_column_name]}', data=payload)
 

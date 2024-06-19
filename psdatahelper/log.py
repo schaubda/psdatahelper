@@ -60,7 +60,7 @@ class Log:
         self._email_header['sender_name'] = sender_name
         self._email_header['recipients'] = recipients
 
-        self._logger.debug(f"Email configuration set.\nSMTP Server: {self._smtp_server}\nEmail Header: "
+        self._logger.debug(f"Email configuration set.\n\tSMTP Server: {self._smtp_server}\n\tEmail Header: "
                            f"{self._email_header}")
 
     def set_formatter(self, formatter: logging.Formatter):
