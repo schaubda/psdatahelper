@@ -7,7 +7,6 @@ from email.message import EmailMessage
 class Report:
     def __init__(self, log=Log('reporting')):
         self._log = log
-        self._email_message = EmailMessage()
         self._email_settings = {
             'smtp_server': '',
             'sender_address': '',
@@ -58,17 +57,19 @@ class Report:
 
         if not bad_settings:
             self._log.debug("Sending report")
-
-            self._email_message['From'] = formataddr(
+            
+            email_message = EmailMessage()
+            
+            email_message['From'] = formataddr(
                 (self._email_settings['sender_name'], self._email_settings['sender_address']))
-            self._email_message['To'] = self._email_settings['recipients']
-            self._email_message['Subject'] = self._email_header['subject']
-            self._email_message.set_content(self._report_body)
+            email_message['To'] = self._email_settings['recipients']
+            email_message['Subject'] = self._email_header['subject']
+            email_message.set_content(self._report_body)
 
             for attachment in self._email_header['attachments']:
                 try:
                     with open(attachment, 'rb') as file:
-                        self._email_message.add_attachment(file.read(), maintype='application', subtype='octet-stream',
+                        email_message.add_attachment(file.read(), maintype='application', subtype='octet-stream',
                                                            filename=attachment)
                 except FileNotFoundError:
                     self._log.error(f"Attachment not found: {attachment}")
@@ -77,7 +78,7 @@ class Report:
 
             try:
                 with smtplib.SMTP(self._email_settings['smtp_server']) as smtp:
-                    smtp.send_message(self._email_message)
+                    smtp.send_message(email_message)
             except Exception as e:
                 self._log.exception(f"Error sending report: {e}")
             else:
