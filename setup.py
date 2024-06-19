@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
         name='psdatahelper',
-        version='24.6.1.13',
+        version='24.6.1.14',
         packages=['psdatahelper'],
         url='https://github.com/schaubda/psdatahelper',
         license='MIT',

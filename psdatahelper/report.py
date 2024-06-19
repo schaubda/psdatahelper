@@ -60,10 +60,10 @@ class Report:
             self._log.debug("Sending report")
 
             self._email_message['From'] = formataddr(
-                (self._email_header['sender_name'], self._email_header['sender_address']))
-            self._email_message['To'] = self._email_header['recipients']
+                (self._email_settings['sender_name'], self._email_settings['sender_address']))
+            self._email_message['To'] = self._email_settings['recipients']
             self._email_message['Subject'] = self._email_header['subject']
-            self._email_message.set_content(self._email_header['body'])
+            self._email_message.set_content(self._report_body)
 
             for attachment in self._email_header['attachments']:
                 try:
