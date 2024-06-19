@@ -52,6 +52,8 @@ class Log:
             'recipients': ''
         }
 
+        self._logger.debug("Logging initialized")
+
     def set_email_config(self, smtp_server: str, sender_address: str, sender_name: str, recipients: str):
         self._smtp_server = smtp_server
         self._email_header['sender_address'] = sender_address
