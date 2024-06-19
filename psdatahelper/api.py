@@ -34,6 +34,7 @@ class API:
     # Set the prefix for PowerQueries
     def set_pq_prefix(self, pq_prefix: str):
         self._pq_prefix = pq_prefix
+        self._log.debug(f"PowerQuery prefix set to {self._pq_prefix}")
 
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name: str) -> pd.DataFrame:
@@ -79,7 +80,7 @@ class API:
             self._log.error(f"PowerQuery {pq_name} not run because the API is not connected")
 
     # Insert records contained in the given Pandas DataFrame into the given table
-    def insert_table_records(self, table_name, records) -> pd.DataFrame:
+    def insert_table_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Inserting records into {table_name}")
 
@@ -126,7 +127,7 @@ class API:
             return pd.DataFrame()
 
     # Update records contained in the given Pandas DataFrame in the given table
-    def update_table_records(self, table_name, id_column_name, records) -> pd.DataFrame:
+    def update_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Updating records in {table_name}")
 
@@ -205,7 +206,7 @@ class API:
             return pd.DataFrame()
 
     # Delete a record with the given ID from the given table
-    def delete_table_record(self, table_name, record_id) -> bool:
+    def delete_table_record(self, table_name: str, record_id: str | int) -> bool:
         if self._api_connected:
             self._log.debug(f"Deleting record from {table_name}")
 
@@ -231,7 +232,7 @@ class API:
             return False
 
     # Delete records contained in the given Pandas DataFrame from the given table
-    def delete_table_records(self, table_name, id_column_name, records) -> pd.DataFrame:
+    def delete_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
         if self._api_connected:
             self._log.debug(f"Deleting records from {table_name}")
 
