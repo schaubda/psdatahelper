@@ -1,9 +1,6 @@
 import acme_powerschool
 import pandas as pd
-import smtplib
 from .log import Log
-from email.utils import formataddr
-from email.message import EmailMessage
 
 
 class API:
@@ -11,16 +8,6 @@ class API:
         self._log = log
         self._api_connected = False
         self._pq_prefix = ''
-        # Initialize a dictionary for report email header
-        self._report_email_header = {
-            'sender_address': '',
-            'sender_name':    '',
-            'recipients':     '',
-            'subject':        '',
-            'body':           '',
-            'attachments':    []
-        }
-        self._smtp_server = ''
 
         # Create an instance of the ACME PowerSchool library
         try:
@@ -49,7 +36,7 @@ class API:
             self._log.debug(f"Running PQ: {full_pq_name}")
 
             # Send a POST request to run the PQ
-            response = self._ps.post(f'ws/schema/query/{full_pq_name}?pagesize=0')
+            response = self._ps.post(f"ws/schema/query/{full_pq_name}?pagesize=0")
 
             # If the request was successful
             if response.status_code == 200:
@@ -95,7 +82,7 @@ class API:
                     payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
                     # Send a POST request to insert the record
-                    response = self._ps.post(f'ws/schema/table/{table_name}', data=payload)
+                    response = self._ps.post(f"ws/schema/table/{table_name}", data=payload)
 
                     # Store the response status code and text in the row
                     row['response_status_code'] = response.status_code
@@ -141,7 +128,7 @@ class API:
                     def update_records(row):
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
-                        response = self._ps.put(f'ws/schema/table/{table_name}/{row[id_column_name]}', data=payload)
+                        response = self._ps.put(f"ws/schema/table/{table_name}/{row[id_column_name]}", data=payload)
 
                         row['response_status_code'] = response.status_code
                         row['response_text'] = response.text
@@ -182,7 +169,7 @@ class API:
             self._log.debug(f"Deleting record from {table_name}")
 
             # Send a DELETE request to remove the record
-            response = self._ps.delete(f'ws/schema/table/{table_name}/{record_id}')
+            response = self._ps.delete(f"ws/schema/table/{table_name}/{record_id}")
 
             if response.status_code == 204:
                 self._log.debug(f"Record successfully deleted from {table_name}")
@@ -210,7 +197,7 @@ class API:
             if not records.empty:
                 # Function to delete a single record
                 def delete_records(row):
-                    response = self._ps.delete(f'ws/schema/table/{table_name}/{row[id_column_name]}')
+                    response = self._ps.delete(f"ws/schema/table/{table_name}/{row[id_column_name]}")
 
                     row['response_status_code'] = response.status_code
                     row['response_text'] = response.text
@@ -244,65 +231,3 @@ class API:
             self._log.error(f"Records not deleted from {table_name} because the API is not connected")
 
             return pd.DataFrame()
-
-    # Set the SMTP server for sending emails
-    def set_smtp_server(self, smtp_server):
-        self._smtp_server = smtp_server
-
-    # Set the sender address for the report email
-    def set_report_sender_address(self, sender_address):
-        self._report_email_header['sender_address'] = sender_address
-
-    # Set the sender name for the report email
-    def set_report_sender_name(self, sender_name):
-        self._report_email_header['sender_name'] = sender_name
-
-    # Set the recipients for the report email
-    def set_report_recipients(self, recipients):
-        self._report_email_header['recipients'] = recipients
-
-    # Set the subject for the report email
-    def set_report_subject(self, subject):
-        self._report_email_header['subject'] = subject
-
-    # Set the body for the report email
-    def set_report_body(self, body):
-        self._report_email_header['body'] = body
-
-    # Add an attachment to the report email
-    def add_report_attachment(self, attachment):
-        self._report_email_header['attachments'].append(attachment)
-
-    # Send the report email
-    def send_report(self):
-        if self._smtp_server != '':
-            self._log.debug("Sending report")
-
-            # Create a new EmailMessage object
-            msg = EmailMessage()
-
-            # Set the From, To, and Subject headers, and the message body
-            msg['From'] = formataddr(
-                    (self._report_email_header['sender_name'], self._report_email_header['sender_address']))
-            msg['To'] = self._report_email_header['recipients']
-            msg['Subject'] = self._report_email_header['subject']
-            msg.set_content(self._report_email_header['body'])
-
-            # Add attachments to the email
-            for attachment in self._report_email_header['attachments']:
-                with open(attachment, 'rb') as f:
-                    file_data = f.read()
-                    file_name = f.name
-
-                msg.add_attachment(file_data, maintype='application', subtype='octet-stream', filename=file_name)
-
-            try:
-                # Send the email using SMTP
-                with smtplib.SMTP(self._smtp_server) as s:
-                    s.send_message(msg)
-            except Exception as e:
-                self._log.error(f"Error sending report: {e}")
-            else:
-                self._log.debug("Report sent successfully")
-        else:
-            self._log.error("No SMTP server specified")
