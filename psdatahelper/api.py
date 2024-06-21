@@ -1,22 +1,40 @@
-import acme_powerschool
 import pandas as pd
 from .log import Log
+from .credential import Credential
+from requests_oauthlib import OAuth2Session
+from oauthlib.oauth2 import BackendApplicationClient
+from oauthlib.oauth2.rfc6749.errors import InvalidClientError
 
 
 class API:
-    def __init__(self, server_url: str, plugin: str, log=Log('ps_api')):
+    def __init__(self, credential: Credential, log=Log('ps_api')):
+        self._credential = credential
         self._log = log
         self._api_connected = False
         self._pq_prefix = ''
 
-        # Create an instance of the ACME PowerSchool library
-        try:
-            self._ps = acme_powerschool.api(server_url, plugin=plugin)
-        except Exception as e:
-            self._log.error(f"Error connecting to the PowerSchool API: {e}")
+        if self._credential.loaded:
+            try:
+                self.session = OAuth2Session(
+                        client=BackendApplicationClient(client_id=self._credential.fields['client_id']),
+                        token={
+                            'token_type':   'Bearer',
+                            'access_token': self._credential.fields['access_token']
+                        }
+                )
+            except InvalidClientError as e:
+                self._log.error(f"Error connecting to the PowerSchool API: {e}")
+            except Exception as e:
+                self._log.error(f"Error connecting to the PowerSchool API: {e}")
+            else:
+                self._log.debug(f"Connected to the PowerSchool API")
+                self.session.headers = {
+                    'Content-Type': 'application/json',
+                    'Accept':       'application/json'
+                }
+                self._api_connected = True
         else:
-            self._log.debug(f"Connected to the PowerSchool API")
-            self._api_connected = True
+            self._log.error(f"API not connected because credentials are not loaded")
 
     # Set the prefix for PowerQueries
     def set_pq_prefix(self, pq_prefix: str):
@@ -26,8 +44,6 @@ class API:
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name: str) -> pd.DataFrame:
         if self._api_connected:
-            full_pq_name = ''
-
             if self._pq_prefix != '':
                 full_pq_name = f"{self._pq_prefix}.{pq_name}"
             else:
@@ -36,7 +52,8 @@ class API:
             self._log.debug(f"Running PQ: {full_pq_name}")
 
             # Send a POST request to run the PQ
-            response = self._ps.post(f"ws/schema/query/{full_pq_name}?pagesize=0")
+            response = self.session.request(method='post', url=f"{self._credential.server_address}/ws/schema/query/"
+                                                               f"{full_pq_name}?pagesize=0")
 
             # If the request was successful
             if response.status_code == 200:
@@ -82,7 +99,10 @@ class API:
                     payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
                     # Send a POST request to insert the record
-                    response = self._ps.post(f"ws/schema/table/{table_name}", data=payload)
+                    response = self.session.request(method='post',
+                                                    url=f"{self._credential.server_address}/ws/schema/table/"
+                                                        f"{table_name}",
+                                                    data=payload)
 
                     # Store the response status code and text in the row
                     row['response_status_code'] = response.status_code
@@ -99,7 +119,7 @@ class API:
                 # If there are errors, log them
                 if not errors.empty:
                     self._log.error(f"Errors inserting records into {table_name}\n{errors.to_string(index=False,
-                                                                                                      justify='left')}")
+                                                                                                    justify='left')}")
                 else:
                     self._log.debug(f"Records successfully inserted into {table_name}")
 
@@ -128,7 +148,10 @@ class API:
                     def update_records(row):
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
-                        response = self._ps.put(f"ws/schema/table/{table_name}/{row[id_column_name]}", data=payload)
+                        response = self.session.request(method='put',
+                                                        url=f"{self._credential.server_address}/ws/schema/table/"
+                                                            f"{table_name}/{row[id_column_name]}",
+                                                        data=payload)
 
                         row['response_status_code'] = response.status_code
                         row['response_text'] = response.text
@@ -169,7 +192,8 @@ class API:
             self._log.debug(f"Deleting record from {table_name}")
 
             # Send a DELETE request to remove the record
-            response = self._ps.delete(f"ws/schema/table/{table_name}/{record_id}")
+            response = self.session.request(method='delete', url=f"{self._credential.server_address}ws/schema/table/"
+                                                                 f"{table_name}/{record_id}")
 
             if response.status_code == 204:
                 self._log.debug(f"Record successfully deleted from {table_name}")
@@ -181,7 +205,8 @@ class API:
 
                     return True
                 else:
-                    self._log.error(f"Error deleting record from {table_name}: {response.status_code} - {response.text}")
+                    self._log.error(
+                            f"Error deleting record from {table_name}: {response.status_code} - {response.text}")
 
                     return False
         else:
@@ -197,7 +222,9 @@ class API:
             if not records.empty:
                 # Function to delete a single record
                 def delete_records(row):
-                    response = self._ps.delete(f"ws/schema/table/{table_name}/{row[id_column_name]}")
+                    response = self.session.request(method='delete',
+                                                    url=f"{self._credential.server_address}/ws/schema/table/"
+                                                        f"{table_name}/{row[id_column_name]}")
 
                     row['response_status_code'] = response.status_code
                     row['response_text'] = response.text
@@ -214,11 +241,12 @@ class API:
 
                 if not not_found.empty:
                     self._log.debug(
-                        f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
+                            f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
 
                 if not failed.empty:
                     self._log.error(
-                        f"Errors deleting records from {table_name}\n{failed.to_string(index=False, justify='left')}")
+                            f"Errors deleting records from {table_name}\n"
+                            f"{failed.to_string(index=False, justify='left')}")
                 else:
                     self._log.debug(f"Records successfully deleted from {table_name}")
 
@@ -231,3 +259,7 @@ class API:
             self._log.error(f"Records not deleted from {table_name} because the API is not connected")
 
             return pd.DataFrame()
+
+    def __del__(self):
+        self._log.debug("Closing API session")
+        self.session.close()
