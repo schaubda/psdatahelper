@@ -177,11 +177,11 @@ class API:
                 response_json = response.json()
 
                 # If the response contains requested record
-                if table_name in response_json:
+                if table_name in response_json['tables']:
                     self._log.debug(f"Record found")
 
                     # Return the records as a pandas DataFrame
-                    return pd.DataFrame(response_json[table_name])
+                    return pd.DataFrame(response_json['tables'][table_name], index=[0])
                 # If the response does not contain requested record
                 else:
                     self._log.debug(f"No records found")
