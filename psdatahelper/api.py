@@ -161,6 +161,44 @@ class API:
 
             return pd.DataFrame()
 
+    def get_table_record(self, table_name: str, record_id: str | int, projection='') -> pd.DataFrame:
+        if projection == '':
+            projection = '*'
+
+        if self._api_connected:
+            self._log.debug(f"Getting record from {table_name}")
+
+            # Send a GET request to retrieve the record
+            response = self._request('get',
+                                     resource=f"/ws/schema/table/{table_name}/{record_id}?projection={projection}")
+
+            if response.status_code == 200:
+                self._log.debug(f"Record found")
+
+                # Store the response as JSON
+                response_json = response.json()
+
+                # If the response contains records
+                if 'record' in response_json:
+                    self._log.debug(f"Records found: {len(response_json['record'])} record(s)")
+
+                    # Return the records as a pandas DataFrame
+                    return pd.DataFrame(response_json['record'])
+                # If the response does not contain records
+                else:
+                    self._log.debug(f"No records found")
+
+                    # Return an empty DataFrame
+                    return pd.DataFrame()
+            else:
+                self._log.error(f"Error getting record from {table_name}: {response.status_code} - {response.text}")
+
+                return pd.DataFrame()
+        else:
+            self._log.error(f"Record {record_id} not retrieved from {table_name} because the API is not connected")
+
+            return pd.DataFrame()
+
     # Insert records contained in the given Pandas DataFrame into the given table
     def insert_table_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         if self._api_connected:
