@@ -60,10 +60,10 @@ class API:
                         for field in root.findall('./errors/field'):
                             access_requests.append(field.text)
 
-                    access_requests = sorted([f"<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
-                                              f"access='ViewOnly' />\n" for field in access_requests])
+                    access_requests = sorted([f"\n<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
+                                              f"access='ViewOnly' />" for field in access_requests])
 
-                    self._log.error(f"No access to field. Access requests:\n{''.join(access_requests)}")
+                    self._log.error(f"No access to field(s). Access requests:{''.join(access_requests)}")
                 except Exception as e:
                     self._log.error(f"Error parsing access requests: {e}")
                 else:
