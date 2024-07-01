@@ -173,18 +173,16 @@ class API:
                                      resource=f"/ws/schema/table/{table_name}/{record_id}?projection={projection}")
 
             if response.status_code == 200:
-                self._log.debug(f"Record found")
-
                 # Store the response as JSON
                 response_json = response.json()
 
-                # If the response contains records
-                if 'record' in response_json:
-                    self._log.debug(f"Records found: {len(response_json['record'])} record(s)")
+                # If the response contains requested record
+                if table_name in response_json:
+                    self._log.debug(f"Record found")
 
                     # Return the records as a pandas DataFrame
-                    return pd.DataFrame(response_json['record'])
-                # If the response does not contain records
+                    return pd.DataFrame(response_json[table_name])
+                # If the response does not contain requested record
                 else:
                     self._log.debug(f"No records found")
 
