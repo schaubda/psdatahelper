@@ -63,7 +63,7 @@ class API:
                     access_requests = sorted([f"<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
                                               f"access='ViewOnly' />\n" for field in access_requests])
 
-                    self._log.error(f"No access to field. Access requests:\n{access_requests}")
+                    self._log.error(f"No access to field. Access requests:\n{''.join(access_requests)}")
                 except Exception as e:
                     self._log.error(f"Error parsing access requests: {e}")
                 else:
@@ -118,7 +118,7 @@ class API:
                     return pd.DataFrame()
             # If the request was not successful
             else:
-                self._log.error(f"Query failed: {response.status_code} - {response.text}")
+                self._log.error(f"Query failed. See above for response details.")
 
                 # Return an empty DataFrame
                 return pd.DataFrame()
