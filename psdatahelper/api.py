@@ -169,10 +169,12 @@ class API:
             # If the records DataFrame is not empty
             if not records.empty:
                 access_requests_needed = False
+                suppress_log = False
 
                 # Define a function to insert a single record
                 def insert_records(row):
                     nonlocal access_requests_needed
+                    nonlocal suppress_log
 
                     # Convert the row to JSON, dropping any null values
                     row_json = row.dropna().to_json()
@@ -182,14 +184,12 @@ class API:
 
                     # Send a POST request to insert the record
                     response = self._request('post', resource=f"/ws/schema/table/{table_name}", read_only=False,
-                                             suppress_log=True, data=payload)
+                                             suppress_log=suppress_log, data=payload)
 
-                    if response.status_code == 403 and not access_requests_needed:
-                        if response.access_requests:
-                            self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
-                                            f"Access requests to add to the plugin:{''.join(response.access_requests)}")
+                    suppress_log = True
 
-                            access_requests_needed = True
+                    if not access_requests_needed and response.status_code == 403:
+                        access_requests_needed = True
 
                     # Store the response status code and text in the row
                     row['response_status_code'] = response.status_code
@@ -231,24 +231,24 @@ class API:
             # If the records DataFrame is not empty
             if not records.empty:
                 access_requests_needed = False
+                suppress_log = False
 
                 # Check if the specified ID column is in the records DataFrame
                 if id_column_name in records.columns:
                     # Function to update a single record
                     def update_records(row):
                         nonlocal access_requests_needed
+                        nonlocal suppress_log
+
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
                         response = self._request('put', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
-                                                 read_only=False, suppress_log=True, data=payload)
+                                                 read_only=False, suppress_log=suppress_log, data=payload)
+
+                        suppress_log = True
 
                         if response.status_code == 403 and not access_requests_needed:
-                            if response.access_requests:
-                                self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
-                                                f"Access requests to add to the plugin:"
-                                                f"{''.join(response.access_requests)}")
-
-                                access_requests_needed = True
+                            access_requests_needed = True
 
                         row['response_status_code'] = response.status_code
                         row['response_text'] = response.text
@@ -317,20 +317,20 @@ class API:
 
             if not records.empty:
                 access_requests_needed = False
+                suppress_log = False
 
                 # Function to delete a single record
                 def delete_records(row):
                     nonlocal access_requests_needed
+                    nonlocal suppress_log
 
                     response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
-                                             read_only=False, suppress_log=True)
+                                             read_only=False, suppress_log=suppress_log)
+
+                    suppress_log = True
 
                     if response.status_code == 403 and not access_requests_needed:
-                        if response.access_requests:
-                            self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
-                                            f"Access requests to add to the plugin:{''.join(response.access_requests)}")
-
-                            access_requests_needed = True
+                        access_requests_needed = True
 
                     row['response_status_code'] = response.status_code
                     row['response_text'] = response.text
