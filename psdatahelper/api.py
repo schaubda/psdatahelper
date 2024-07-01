@@ -1,7 +1,10 @@
 import pandas as pd
+import xml.etree.ElementTree as ET
 from .log import Log
 from .credential import Credential
 from requests_oauthlib import OAuth2Session
+from unittest.mock import Mock
+from requests.models import Response
 from oauthlib.oauth2 import BackendApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InvalidClientError
 
@@ -36,6 +39,46 @@ class API:
         else:
             self._log.error(f"API not connected because credentials are not loaded")
 
+    def _request(self, method: str, resource: str, **kwargs):
+        if self._api_connected:
+            response = self.session.request(method=method, url=f"{self._credential.server_address}{resource}", **kwargs)
+
+            if response.status_code == 401:
+                self._log.error(f"Unauthorized request to {resource}:\n\t{response.text}")
+            elif response.status_code == 403:
+                access_requests = []
+
+                try:
+                    if response.headers["Content-Type"] == 'application/json':
+                        for error in response.json()['errors']:
+                            access_requests.append(error['field'])
+
+                    if response.headers["Content-Type"] == 'application/xml':
+                        tree = ET.ElementTree(ET.fromstring(response.text))
+                        root = tree.getroot()
+
+                        for field in root.findall('./errors/field'):
+                            access_requests.append(field.text)
+
+                    access_requests = sorted([f"<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
+                                              f"access='ViewOnly' />\n" for field in access_requests])
+
+                    self._log.error(f"No access to field. Access requests:\n{access_requests}")
+                except Exception as e:
+                    self._log.error(f"Error parsing access requests: {e}")
+                else:
+                    response.access_requests = access_requests
+
+            return response
+        else:
+            self._log.error(f"API request not made because the API is not connected")
+
+            response = Mock(spec=Response)
+            response.status_code = 404
+            response.json.return_value = {}
+
+            return response
+
     # Set the prefix for PowerQueries
     def set_pq_prefix(self, pq_prefix: str):
         self._pq_prefix = pq_prefix
@@ -52,8 +95,7 @@ class API:
             self._log.debug(f"Running PQ: {full_pq_name}")
 
             # Send a POST request to run the PQ
-            response = self.session.request(method='post', url=f"{self._credential.server_address}/ws/schema/query/"
-                                                               f"{full_pq_name}?pagesize=0")
+            response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0")
 
             # If the request was successful
             if response.status_code == 200:
@@ -83,6 +125,8 @@ class API:
         else:
             self._log.error(f"PowerQuery {pq_name} not run because the API is not connected")
 
+            return pd.DataFrame()
+
     # Insert records contained in the given Pandas DataFrame into the given table
     def insert_table_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         if self._api_connected:
@@ -99,10 +143,7 @@ class API:
                     payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
                     # Send a POST request to insert the record
-                    response = self.session.request(method='post',
-                                                    url=f"{self._credential.server_address}/ws/schema/table/"
-                                                        f"{table_name}",
-                                                    data=payload)
+                    response = self._request('post', resource=f"/ws/schema/table/{table_name}", data=payload)
 
                     # Store the response status code and text in the row
                     row['response_status_code'] = response.status_code
@@ -125,7 +166,7 @@ class API:
 
                 return results
             else:
-                self._log.debug(f"Input records DataFrame is empty")
+                self._log.debug(f"Input records DataFrame is empty. No records inserted.")
 
                 return pd.DataFrame()
         else:
@@ -148,10 +189,8 @@ class API:
                     def update_records(row):
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
-                        response = self.session.request(method='put',
-                                                        url=f"{self._credential.server_address}/ws/schema/table/"
-                                                            f"{table_name}/{row[id_column_name]}",
-                                                        data=payload)
+                        response = self._request('put', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
+                                                 data=payload)
 
                         row['response_status_code'] = response.status_code
                         row['response_text'] = response.text
@@ -192,8 +231,7 @@ class API:
             self._log.debug(f"Deleting record from {table_name}")
 
             # Send a DELETE request to remove the record
-            response = self.session.request(method='delete', url=f"{self._credential.server_address}ws/schema/table/"
-                                                                 f"{table_name}/{record_id}")
+            response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{record_id}")
 
             if response.status_code == 204:
                 self._log.debug(f"Record successfully deleted from {table_name}")
@@ -222,9 +260,7 @@ class API:
             if not records.empty:
                 # Function to delete a single record
                 def delete_records(row):
-                    response = self.session.request(method='delete',
-                                                    url=f"{self._credential.server_address}/ws/schema/table/"
-                                                        f"{table_name}/{row[id_column_name]}")
+                    response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}")
 
                     row['response_status_code'] = response.status_code
                     row['response_text'] = response.text
@@ -261,5 +297,5 @@ class API:
             return pd.DataFrame()
 
     def __del__(self):
-        self._log.debug("Closing API session")
+        self._log.debug(f"Closing API session")
         self.session.close()
