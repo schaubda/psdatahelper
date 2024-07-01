@@ -39,45 +39,79 @@ class API:
         else:
             self._log.error(f"API not connected because credentials are not loaded")
 
-    def _request(self, method: str, resource: str, **kwargs):
+    def _request(self, method: str, resource: str, read_only=True, suppress_log=False, **kwargs):
         if self._api_connected:
             response = self.session.request(method=method, url=f"{self._credential.server_address}{resource}", **kwargs)
 
-            if response.status_code == 401:
-                self._log.error(f"Unauthorized request to {resource}:\n\t{response.text}")
-            elif response.status_code == 403:
-                access_requests = []
+            if response.status_code == 403:
+                access_requests = self._parse_access_requests(response, read_only=read_only)
 
-                try:
-                    if response.headers["Content-Type"] == 'application/json':
-                        for error in response.json()['errors']:
-                            access_requests.append(error['field'])
+                if access_requests:
+                    if not suppress_log:
+                        self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
+                                        f"Access requests to add to the plugin:{''.join(access_requests)}")
 
-                    if response.headers["Content-Type"] == 'application/xml':
-                        tree = ET.ElementTree(ET.fromstring(response.text))
-                        root = tree.getroot()
-
-                        for field in root.findall('./errors/field'):
-                            access_requests.append(field.text)
-
-                    access_requests = sorted([f"\n<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
-                                              f"access='ViewOnly' />" for field in access_requests])
-
-                    self._log.error(f"No access to field(s). Access requests:{''.join(access_requests)}")
-                except Exception as e:
-                    self._log.error(f"Error parsing access requests: {e}")
-                else:
                     response.access_requests = access_requests
+            elif response.status_code != 200 and not suppress_log:
+                if response.status_code == 400:
+                    self._log.error(f"Bad request to {resource}:\n\t{response.text}")
+                elif response.status_code == 401:
+                    self._log.error(f"Unauthorized request to {resource}:\n\t{response.text}")
+                elif response.status_code == 404:
+                    self._log.error(f"Resource not found: {resource}")
+                elif response.status_code == 405:
+                    self._log.error(f'Method "{method}" not allowed for {resource}')
+                elif response.status_code == 409:
+                    self._log.error(f"Conflict with {resource}:\n\t{response.text}")
+                elif response.status_code == 415:
+                    self._log.error(f"Unsupported media type for {resource}:\n\t{response.text}")
+                elif response.status_code == 500:
+                    self._log.error(f"Internal server error for {resource}:\n\t{response.text}")
+                elif response.status_code == 509:
+                    self._log.error(f"Resource throttling currently in place for {resource}:\n\t{response.text}")
 
             return response
         else:
-            self._log.error(f"API request not made because the API is not connected")
+            if not suppress_log:
+                self._log.error(f"API request not made because the API is not connected")
 
             response = Mock(spec=Response)
             response.status_code = 404
             response.json.return_value = {}
 
             return response
+
+    def _parse_access_requests(self, response: Response, read_only=True) -> list[str]:
+        if response.status_code == 403:
+            access_requests = []
+
+            if read_only:
+                access_level = 'ViewOnly'
+            else:
+                access_level = 'FullAccess'
+
+            try:
+                if response.headers["Content-Type"] == 'application/json':
+                    for error in response.json()['errors']:
+                        access_requests.append(error['field'])
+
+                if response.headers["Content-Type"] == 'application/xml':
+                    tree = ET.ElementTree(ET.fromstring(response.text))
+                    root = tree.getroot()
+
+                    for field in root.findall('./errors/field'):
+                        access_requests.append(field.text)
+
+                access_requests = sorted([f"\n<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
+                                          f"access='{access_level}' />" for field in access_requests])
+            except Exception as e:
+                self._log.error(f"Error parsing access requests: {e}")
+
+            return access_requests
+        else:
+            self._log.error(f"Response status code is not 403\n\t{response.status_code} - {response.text}")
+
+            return []
 
     # Set the prefix for PowerQueries
     def set_pq_prefix(self, pq_prefix: str):
@@ -134,8 +168,12 @@ class API:
 
             # If the records DataFrame is not empty
             if not records.empty:
+                access_requests_needed = False
+
                 # Define a function to insert a single record
                 def insert_records(row):
+                    nonlocal access_requests_needed
+
                     # Convert the row to JSON, dropping any null values
                     row_json = row.dropna().to_json()
 
@@ -143,7 +181,15 @@ class API:
                     payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
                     # Send a POST request to insert the record
-                    response = self._request('post', resource=f"/ws/schema/table/{table_name}", data=payload)
+                    response = self._request('post', resource=f"/ws/schema/table/{table_name}", read_only=False,
+                                             suppress_log=True, data=payload)
+
+                    if response.status_code == 403 and not access_requests_needed:
+                        if response.access_requests:
+                            self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
+                                            f"Access requests to add to the plugin:{''.join(response.access_requests)}")
+
+                            access_requests_needed = True
 
                     # Store the response status code and text in the row
                     row['response_status_code'] = response.status_code
@@ -159,8 +205,9 @@ class API:
 
                 # If there are errors, log them
                 if not errors.empty:
-                    self._log.error(f"Errors inserting records into {table_name}\n{errors.to_string(index=False,
-                                                                                                    justify='left')}")
+                    if not access_requests_needed:
+                        self._log.error(f"Errors inserting records into {table_name}\n"
+                                        f"{errors.to_string(index=False, justify='left')}")
                 else:
                     self._log.debug(f"Records successfully inserted into {table_name}")
 
@@ -183,14 +230,25 @@ class API:
 
             # If the records DataFrame is not empty
             if not records.empty:
+                access_requests_needed = False
+
                 # Check if the specified ID column is in the records DataFrame
                 if id_column_name in records.columns:
                     # Function to update a single record
                     def update_records(row):
+                        nonlocal access_requests_needed
                         row_json = row.drop(id_column_name).to_json()
                         payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
                         response = self._request('put', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
-                                                 data=payload)
+                                                 read_only=False, suppress_log=True, data=payload)
+
+                        if response.status_code == 403 and not access_requests_needed:
+                            if response.access_requests:
+                                self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
+                                                f"Access requests to add to the plugin:"
+                                                f"{''.join(response.access_requests)}")
+
+                                access_requests_needed = True
 
                         row['response_status_code'] = response.status_code
                         row['response_text'] = response.text
@@ -204,9 +262,9 @@ class API:
 
                     # If there are errors, log them
                     if not errors.empty:
-                        self._log.error(
-                                f"Errors updating records in {table_name}\n"
-                                f"{errors.to_string(index=False, justify='left')}")
+                        if not access_requests_needed:
+                            self._log.error(f"Errors updating records in {table_name}\n"
+                                            f"{errors.to_string(index=False, justify='left')}")
                     else:
                         self._log.debug(f"Records successfully updated in {table_name}")
 
@@ -231,7 +289,7 @@ class API:
             self._log.debug(f"Deleting record from {table_name}")
 
             # Send a DELETE request to remove the record
-            response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{record_id}")
+            response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{record_id}", read_only=False)
 
             if response.status_code == 204:
                 self._log.debug(f"Record successfully deleted from {table_name}")
@@ -242,7 +300,7 @@ class API:
                     self._log.debug(f"Record {record_id} not found in {table_name}")
 
                     return True
-                else:
+                elif response.status_code != 403:
                     self._log.error(
                             f"Error deleting record from {table_name}: {response.status_code} - {response.text}")
 
@@ -258,9 +316,21 @@ class API:
             self._log.debug(f"Deleting records from {table_name}")
 
             if not records.empty:
+                access_requests_needed = False
+
                 # Function to delete a single record
                 def delete_records(row):
-                    response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}")
+                    nonlocal access_requests_needed
+
+                    response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
+                                             read_only=False, suppress_log=True)
+
+                    if response.status_code == 403 and not access_requests_needed:
+                        if response.access_requests:
+                            self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
+                                            f"Access requests to add to the plugin:{''.join(response.access_requests)}")
+
+                            access_requests_needed = True
 
                     row['response_status_code'] = response.status_code
                     row['response_text'] = response.text
@@ -280,9 +350,9 @@ class API:
                             f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
 
                 if not failed.empty:
-                    self._log.error(
-                            f"Errors deleting records from {table_name}\n"
-                            f"{failed.to_string(index=False, justify='left')}")
+                    if not access_requests_needed:
+                        self._log.error(f"Errors deleting records from {table_name}\n"
+                                        f"{failed.to_string(index=False, justify='left')}")
                 else:
                     self._log.debug(f"Records successfully deleted from {table_name}")
 
