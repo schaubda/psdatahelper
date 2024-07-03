@@ -1,15 +1,17 @@
 import pandas as pd
-from .log import Log
+import json
 from .credential import Credential
-from requests_oauthlib import OAuth2Session
-from unittest.mock import Mock
-from requests.models import Response
+from .log import Log
 from oauthlib.oauth2 import BackendApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InvalidClientError
+from requests.models import Response
+from requests_oauthlib import OAuth2Session
+from typing import Optional
+from unittest.mock import Mock
 
 
 class API:
-    def __init__(self, credential: Credential, log=Log('ps_api')):
+    def __init__(self, credential: Credential, log: Log = Log('ps_api')):
         self._credential = credential
         self._log = log
         self._api_connected = False
@@ -38,7 +40,7 @@ class API:
         else:
             self._log.error(f"API not connected because credentials are not loaded")
 
-    def _request(self, method: str, resource: str, read_only=True, suppress_log=False, **kwargs):
+    def _request(self, method: str, resource: str, read_only: bool = True, suppress_log: bool = False, **kwargs):
         if self._api_connected:
             response = self.session.request(method=method, url=f"{self._credential.server_address}{resource}", **kwargs)
 
@@ -80,7 +82,7 @@ class API:
 
             return response
 
-    def _parse_access_requests(self, response: Response, read_only=True) -> list[str]:
+    def _parse_access_requests(self, response: Response, read_only: bool = True) -> list[str]:
         if response.status_code == 403:
             access_requests = []
 
@@ -115,6 +117,8 @@ class API:
 
         # If the response contains records
         if 'record' in response_json and 'tables' in response_json['record'][0]:
+            self._log.debug(f"{len(response_json['record'])} records returned from PQ")
+
             records = []
             fields = {}
             tables = response_json['record'][0]['tables'].keys()
@@ -139,7 +143,9 @@ class API:
             return pd.DataFrame()
 
     # Run the given PowerQuery and return the results as a Pandas DataFrame
-    def run_pq(self, pq_name: str) -> pd.DataFrame:
+    def run_pq(self, pq_name: str, pq_parameters: Optional[dict] = None) -> pd.DataFrame:
+        if pq_parameters is None:
+            pq_parameters = dict()
         if self._api_connected:
             if self._pq_prefix != '':
                 full_pq_name = f"{self._pq_prefix}.{pq_name}"
@@ -148,8 +154,16 @@ class API:
 
             self._log.debug(f"Running PQ: {full_pq_name}")
 
-            # Send a POST request to run the PQ
-            response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0")
+            if pq_parameters is not None and len(pq_parameters) > 0:
+                # Convert the parameters to JSON
+                payload = json.dumps(pq_parameters)
+
+                # Send a POST request to run the PQ with parameters
+                response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0",
+                                         data=payload)
+            else:
+                # Send a POST request to run the PQ
+                response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0")
 
             # If the request was successful
             if response.status_code == 200:
@@ -167,7 +181,7 @@ class API:
 
             return pd.DataFrame()
 
-    def get_table_record(self, table_name: str, record_id: str | int, projection='') -> pd.DataFrame:
+    def get_table_record(self, table_name: str, record_id: str | int, projection: str = '') -> pd.DataFrame:
         if self._api_connected:
             if projection == '':
                 projection = '*'
@@ -209,6 +223,8 @@ class API:
 
         # If the response contains records
         if 'record' in response_json and 'tables' in response_json['record'][0]:
+            self._log.debug(f"{len(response_json['record'])} records returned from {table_name}")
+
             records = []
             fields = {}
 
@@ -232,8 +248,8 @@ class API:
             # Return an empty DataFrame
             return pd.DataFrame()
 
-    def get_table_records(self, table_name: str, query_expression: str, projection='', page=0, pagesize=0, sort='',
-                          sortdescending=False) -> pd.DataFrame:
+    def get_table_records(self, table_name: str, query_expression: str, projection: str = '', page: int = 0,
+                          pagesize: int = 0, sort: str = '', sortdescending: bool = False) -> pd.DataFrame:
         if self._api_connected:
             if projection == '':
                 projection = '*'
@@ -315,7 +331,7 @@ class API:
                         self._log.error(f"Errors inserting records into {table_name}\n"
                                         f"{errors.to_string(index=False, justify='left')}")
                 else:
-                    self._log.debug(f"Records successfully inserted into {table_name}")
+                    self._log.debug(f"{len(results.index)} record(s) successfully inserted into {table_name}")
 
                 return results
             else:
@@ -372,7 +388,7 @@ class API:
                             self._log.error(f"Errors updating records in {table_name}\n"
                                             f"{errors.to_string(index=False, justify='left')}")
                     else:
-                        self._log.debug(f"Records successfully updated in {table_name}")
+                        self._log.debug(f"{len(results.index)} records successfully updated in {table_name}")
 
                     return results
                 # If the specified ID column is not in the records DataFrame, log an error
@@ -460,7 +476,9 @@ class API:
                         self._log.error(f"Errors deleting records from {table_name}\n"
                                         f"{failed.to_string(index=False, justify='left')}")
                 else:
-                    self._log.debug(f"Records successfully deleted from {table_name}")
+                    self._log.debug(f"{len(results.index) - len(not_found.index)} records successfully deleted from"
+                                    f" {table_name}")
+                    self._log.debug(f"{len(not_found.index)} records not found in {table_name}")
 
                 return results
             else:
