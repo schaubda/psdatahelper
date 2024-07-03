@@ -1,5 +1,4 @@
 import pandas as pd
-import xml.etree.ElementTree as ET
 from .log import Log
 from .credential import Credential
 from requests_oauthlib import OAuth2Session
@@ -91,21 +90,13 @@ class API:
                 access_level = 'FullAccess'
 
             try:
-                if response.headers["Content-Type"] == 'application/json':
-                    for error in response.json()['errors']:
-                        access_requests.append(error['field'])
-
-                if response.headers["Content-Type"] == 'application/xml':
-                    tree = ET.ElementTree(ET.fromstring(response.text))
-                    root = tree.getroot()
-
-                    for field in root.findall('./errors/field'):
-                        access_requests.append(field.text)
-
-                access_requests = sorted([f"\n<field table='{field.split('.')[0]}' field='{field.split('.')[1]}' "
-                                          f"access='{access_level}' />" for field in access_requests])
+                for error in response.json()['errors']:
+                    access_requests.append(f'\n<field table="{error["resource"]}" field="{error["field"]}" '
+                                           f'access="{access_level}"/>')
             except Exception as e:
                 self._log.error(f"Error parsing access requests: {e}")
+
+            access_requests.sort()
 
             return access_requests
         else:
@@ -117,6 +108,35 @@ class API:
     def set_pq_prefix(self, pq_prefix: str):
         self._pq_prefix = pq_prefix
         self._log.debug(f"PowerQuery prefix set to {self._pq_prefix}")
+
+    def _parse_pq_response(self, response: Response) -> pd.DataFrame:
+        # Store the response as JSON
+        response_json = response.json()
+
+        # If the response contains records
+        if 'record' in response_json and 'tables' in response_json['record'][0]:
+            records = []
+            fields = {}
+            tables = response_json['record'][0]['tables'].keys()
+
+            for record in response_json['record']:
+                for table in tables:
+                    for key, value in record['tables'][table].items():
+                        fields.update({f"{table}.{key}": value})
+
+                records.append(fields.copy())
+                fields.clear()
+
+            return pd.DataFrame(records)
+        elif 'record' in response_json:
+            # Return the records as a pandas DataFrame
+            return pd.DataFrame(response_json['record'])
+        # If the response does not contain records
+        else:
+            self._log.debug('No records found')
+
+            # Return an empty DataFrame
+            return pd.DataFrame()
 
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name: str) -> pd.DataFrame:
@@ -135,21 +155,7 @@ class API:
             if response.status_code == 200:
                 self._log.debug(f"Query successful")
 
-                # Store the response as JSON
-                response_json = response.json()
-
-                # If the response contains records
-                if 'record' in response_json:
-                    self._log.debug(f"Records found: {len(response_json['record'])} record(s)")
-
-                    # Return the records as a pandas DataFrame
-                    return pd.DataFrame(response_json['record'])
-                # If the response does not contain records
-                else:
-                    self._log.debug(f"No records found")
-
-                    # Return an empty DataFrame
-                    return pd.DataFrame()
+                return self._parse_pq_response(response)
             # If the request was not successful
             else:
                 self._log.error(f"Query failed. See above for response details.")
@@ -162,10 +168,10 @@ class API:
             return pd.DataFrame()
 
     def get_table_record(self, table_name: str, record_id: str | int, projection='') -> pd.DataFrame:
-        if projection == '':
-            projection = '*'
-
         if self._api_connected:
+            if projection == '':
+                projection = '*'
+
             self._log.debug(f"Getting record from {table_name}")
 
             # Send a GET request to retrieve the record
@@ -194,6 +200,70 @@ class API:
                 return pd.DataFrame()
         else:
             self._log.error(f"Record {record_id} not retrieved from {table_name} because the API is not connected")
+
+            return pd.DataFrame()
+
+    def _parse_table_response(self, response: Response, table_name: str) -> pd.DataFrame:
+        # Store the response as JSON
+        response_json = response.json()
+
+        # If the response contains records
+        if 'record' in response_json and 'tables' in response_json['record'][0]:
+            records = []
+            fields = {}
+
+            for record in response_json['record']:
+                fields.update({'id': record['id']})
+
+                for key, value in record['tables'][table_name].items():
+                    fields.update({key: value})
+
+                records.append(fields.copy())
+                fields.clear()
+
+            return pd.DataFrame(records)
+        elif 'record' in response_json:
+            # Return the records as a pandas DataFrame
+            return pd.DataFrame(response_json['record'])
+        # If the response does not contain records
+        else:
+            self._log.debug('No records found')
+
+            # Return an empty DataFrame
+            return pd.DataFrame()
+
+    def get_table_records(self, table_name: str, query_expression: str, projection='', page=0, pagesize=0, sort='',
+                          sortdescending=False) -> pd.DataFrame:
+        if self._api_connected:
+            if projection == '':
+                projection = '*'
+
+            self._log.debug(f"Getting records from {table_name}")
+
+            resource = f"/ws/schema/table/{table_name}?q={query_expression}&projection={projection}"
+
+            if page > 0:
+                resource += f"&page={page}"
+
+            if pagesize > 0:
+                resource += f"&pagesize={pagesize}"
+
+            if sort != '':
+                resource += f"&sort={sort}"
+
+                if sortdescending:
+                    resource += "&sortdescending=true"
+
+            response = self._request('get', resource=resource)
+
+            if response.status_code == 200:
+                return self._parse_table_response(response, table_name)
+            else:
+                self._log.error(f"Error getting records from {table_name}: {response.status_code} - {response.text}")
+
+                return pd.DataFrame()
+        else:
+            self._log.error(f"Records not retrieved from {table_name} because the API is not connected")
 
             return pd.DataFrame()
 
