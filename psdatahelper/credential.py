@@ -61,7 +61,7 @@ class Credential:
     def _load_api_credentials(self):
         try:
             self.fields.update(json.loads(kr.get_password(self.server_name, self._plugin)))
-        except Exception as e:
+        except Exception:
             self._log.debug(f"No credentials found for plugin {self._plugin} on "
                             f"{self.server_address}.")
 

@@ -484,5 +484,5 @@ class API:
         return results
 
     def __del__(self):
-        self._log.debug(f"Closing API session")
+        self._log.debug('Closing API session')
         self.session.close()
