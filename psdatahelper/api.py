@@ -51,6 +51,14 @@ class API:
         else:
             self._log.error('API not connected because credentials are not loaded')
 
+    def __del__(self):
+        """
+        TODO: Fill in the docstring for API.__del__
+        :return:
+        """
+        self._log.debug('Closing API session')
+        self.session.close()
+
     def _parse_access_requests(self, response: Response, read_only: bool = True) -> list[str]:
         """
         TODO: Fill in the docstring for API._parse_access_requests
@@ -140,19 +148,9 @@ class API:
 
         return response
 
-    # Set the prefix for PowerQueries
-    def set_pq_prefix(self, pq_prefix: str):
+    def _pq_parse_response(self, response: Response) -> pd.DataFrame:
         """
-        TODO: Fill in the docstring for API.set_pq_prefix
-        :param pq_prefix:
-        :return:
-        """
-        self._pq_prefix = pq_prefix
-        self._log.debug(f"PowerQuery prefix set to {self._pq_prefix}")
-
-    def _parse_pq_response(self, response: Response) -> pd.DataFrame:
-        """
-        TODO: Fill in the docstring for API._parse_pq_response
+        TODO: Fill in the docstring for API._pq_parse_response
         :param response:
         :return:
         """
@@ -186,10 +184,57 @@ class API:
             # Return an empty DataFrame
             return pd.DataFrame()
 
-    # Run the given PowerQuery and return the results as a Pandas DataFrame
-    def run_pq(self, pq_name: str, pq_parameters: Optional[dict] = None) -> pd.DataFrame:
+    def _table_parse_response(self, response: Response, table_name: str) -> pd.DataFrame:
         """
-        TODO: Fill in the docstring for API.run_pq
+        TODO: Fill in the docstring for API._parse_table_response
+        :param response:
+        :param table_name:
+        :return:
+        """
+        # Store the response as JSON
+        response_json = response.json()
+
+        # If the response contains records
+        if 'record' in response_json and 'tables' in response_json['record'][0]:
+            self._log.debug(f"{len(response_json['record'])} records returned from {table_name}")
+
+            records = []
+            fields = {}
+
+            for record in response_json['record']:
+                fields.update({'id': record['id']})
+
+                for key, value in record['tables'][table_name].items():
+                    fields.update({key: value})
+
+                records.append(fields.copy())
+                fields.clear()
+
+            return pd.DataFrame(records)
+        elif 'record' in response_json:
+            # Return the records as a pandas DataFrame
+            return pd.DataFrame(response_json['record'])
+        # If the response does not contain records
+        else:
+            self._log.debug(self._NO_RECORDS_LOG_MSG)
+
+            # Return an empty DataFrame
+            return pd.DataFrame()
+
+    # Set the prefix for PowerQueries
+    def pq_set_prefix(self, pq_prefix: str):
+        """
+        TODO: Fill in the docstring for API.pq_set_prefix
+        :param pq_prefix:
+        :return:
+        """
+        self._pq_prefix = pq_prefix
+        self._log.debug(f"PowerQuery prefix set to {self._pq_prefix}")
+
+    # Run the given PowerQuery and return the results as a Pandas DataFrame
+    def pq_run(self, pq_name: str, pq_parameters: Optional[dict] = None) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.pq_run
         :param pq_name:
         :param pq_parameters:
         :return:
@@ -224,7 +269,7 @@ class API:
         if response.status_code == 200:
             self._log.debug('Query successful')
 
-            return self._parse_pq_response(response)
+            return self._pq_parse_response(response)
         # If the request was not successful
         else:
             self._log.error('Query failed. See above for response details.')
@@ -232,7 +277,7 @@ class API:
             # Return an empty DataFrame
             return pd.DataFrame()
 
-    def get_table_record(self, table_name: str, record_id: str | int, projection: str = '*') -> pd.DataFrame:
+    def table_get_record(self, table_name: str, record_id: str | int, projection: str = '*') -> pd.DataFrame:
         """
         TODO: Fill in the docstring for API.get_table_record
         :param table_name:
@@ -272,44 +317,7 @@ class API:
 
             return pd.DataFrame()
 
-    def _parse_table_response(self, response: Response, table_name: str) -> pd.DataFrame:
-        """
-        TODO: Fill in the docstring for API._parse_table_response
-        :param response:
-        :param table_name:
-        :return:
-        """
-        # Store the response as JSON
-        response_json = response.json()
-
-        # If the response contains records
-        if 'record' in response_json and 'tables' in response_json['record'][0]:
-            self._log.debug(f"{len(response_json['record'])} records returned from {table_name}")
-
-            records = []
-            fields = {}
-
-            for record in response_json['record']:
-                fields.update({'id': record['id']})
-
-                for key, value in record['tables'][table_name].items():
-                    fields.update({key: value})
-
-                records.append(fields.copy())
-                fields.clear()
-
-            return pd.DataFrame(records)
-        elif 'record' in response_json:
-            # Return the records as a pandas DataFrame
-            return pd.DataFrame(response_json['record'])
-        # If the response does not contain records
-        else:
-            self._log.debug(self._NO_RECORDS_LOG_MSG)
-
-            # Return an empty DataFrame
-            return pd.DataFrame()
-
-    def get_table_records(self, table_name: str, query_expression: str, projection: str = '*', page: int = 0,
+    def table_get_records(self, table_name: str, query_expression: str, projection: str = '*', page: int = 0,
                           pagesize: int = 0, sort: str = '', sortdescending: bool = False) -> pd.DataFrame:
         """
         TODO: Fill in the docstring for API.get_table_records
@@ -346,14 +354,14 @@ class API:
         response = self._request('get', resource=resource)
 
         if response.status_code == 200:
-            return self._parse_table_response(response, table_name)
+            return self._table_parse_response(response, table_name)
         else:
             self._log.error(f"Error getting records from {table_name}: {response.status_code} - {response.text}")
 
             return pd.DataFrame()
 
     # Insert records contained in the given Pandas DataFrame into the given table
-    def insert_table_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
+    def table_insert_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         TODO: Fill in the docstring for API.insert_table_records
         :param table_name:
@@ -417,7 +425,7 @@ class API:
         return results
 
     # Update records contained in the given Pandas DataFrame in the given table
-    def update_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+    def table_update_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         TODO: Fill in the docstring for API.update_table_records
         :param table_name:
@@ -482,7 +490,7 @@ class API:
         return results
 
     # Delete a record with the given ID from the given table
-    def delete_table_record(self, table_name: str, record_id: str | int) -> bool:
+    def table_delete_record(self, table_name: str, record_id: str | int) -> bool:
         """
         TODO: Fill in the docstring for API.delete_table_record
         :param table_name:
@@ -515,7 +523,7 @@ class API:
                 return False
 
     # Delete records contained in the given Pandas DataFrame from the given table
-    def delete_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+    def table_delete_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         TODO: Fill in the docstring for API.delete_table_records
         :param table_name:
@@ -578,11 +586,3 @@ class API:
             self._log.debug(f"{len(not_found.index)} records not found in {table_name}")
 
         return results
-
-    def __del__(self):
-        """
-        TODO: Fill in the docstring for API.__del__
-        :return:
-        """
-        self._log.debug('Closing API session')
-        self.session.close()
