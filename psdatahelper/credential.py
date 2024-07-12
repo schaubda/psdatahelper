@@ -11,12 +11,27 @@ from requests.auth import HTTPBasicAuth
 
 
 class CredentialType(Enum):
+    """
+    TODO: Fill in the docstring for CredentialType
+    An enumeration of the types of credentials that can be stored.
+    """
     API = 1
     ODBC = 2
 
 
 class Credential:
+    """
+    TODO: Fill in the docstring for Credential
+    """
+
     def __init__(self, server_address: str, plugin: str, cred_type=CredentialType.API, log=Log('credential')):
+        """
+        TODO: Fill in the docstring for Credential.__init__
+        :param server_address:
+        :param plugin:
+        :param cred_type:
+        :param log:
+        """
         self._plugin = plugin
         self._cred_type = cred_type
         self._log = log
@@ -59,6 +74,10 @@ class Credential:
             self._log.error("Invalid credential type specified")
 
     def _load_api_credentials(self):
+        """
+        TODO: Fill in the docstring for Credential._load_api_credentials
+        :return:
+        """
         try:
             self.fields.update(json.loads(kr.get_password(self.server_name, self._plugin)))
         except Exception:
@@ -80,10 +99,18 @@ class Credential:
             self._log.debug("Credentials stored")
 
     def _save_api_credentials(self):
+        """
+        TODO: Fill in the docstring for Credential._save_api_credentials
+        :return:
+        """
         kr.set_password(self.server_name, self._plugin, json.dumps(self.fields))
         self._log.debug("Credentials stored")
 
     def _get_api_access_token(self):
+        """
+        TODO: Fill in the docstring for Credential._get_api_access_token
+        :return:
+        """
         self._log.debug(f"Opening session for {self.server_name} to obtain access token")
         self._session = OAuth2Session(client=BackendApplicationClient(client_id=self.fields['client_id']))
 
@@ -103,6 +130,10 @@ class Credential:
         self._session.close()
 
     def __repr__(self):
+        """
+        TODO: Fill in the docstring for Credential.__repr__
+        :return:
+        """
         if self._cred_type == CredentialType.API:
             return (f"Credential(server_name='{self.server_name}', plugin='{self._plugin}', "
                     f"cred_type='{self._cred_type}')")

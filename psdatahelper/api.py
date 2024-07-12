@@ -7,11 +7,19 @@ from oauthlib.oauth2.rfc6749.errors import InvalidClientError
 from requests.models import Response
 from requests_oauthlib import OAuth2Session
 from typing import Optional
-from unittest.mock import Mock
 
 
 class API:
+    """
+    TODO: Fill in the docstring for API
+    """
+
     def __init__(self, credential: Credential, log: Log = Log('ps_api')):
+        """
+        TODO: Fill in the docstring for API.__init__
+        :param credential:
+        :param log:
+        """
         self._credential = credential
         self._log = log
         self._api_connected = False
@@ -44,6 +52,12 @@ class API:
             self._log.error('API not connected because credentials are not loaded')
 
     def _parse_access_requests(self, response: Response, read_only: bool = True) -> list[str]:
+        """
+        TODO: Fill in the docstring for API._parse_access_requests
+        :param response:
+        :param read_only:
+        :return:
+        """
         if response.status_code == 403:
             access_requests = []
 
@@ -68,6 +82,13 @@ class API:
             return []
 
     def _log_response_status_code(self, resource: str, method: str, response: Response):
+        """
+        TODO: Fill in the docstring for API._log_response_status_code
+        :param resource:
+        :param method:
+        :param response:
+        :return:
+        """
         match response.status_code:
             case 400:
                 self._log.error(f"Bad request to {resource}:\n\t{response.text}")
@@ -94,6 +115,15 @@ class API:
                 self._log.error(f"Resource throttling currently in place for {resource}:\n\t{response.text}")
 
     def _request(self, method: str, resource: str, read_only: bool = True, suppress_log: bool = False, **kwargs):
+        """
+        TODO: Fill in the docstring for API._request
+        :param method:
+        :param resource:
+        :param read_only:
+        :param suppress_log:
+        :param kwargs:
+        :return:
+        """
         response = self.session.request(method=method, url=f"{self._credential.server_address}{resource}", **kwargs)
 
         if response.status_code == 403:
@@ -112,10 +142,20 @@ class API:
 
     # Set the prefix for PowerQueries
     def set_pq_prefix(self, pq_prefix: str):
+        """
+        TODO: Fill in the docstring for API.set_pq_prefix
+        :param pq_prefix:
+        :return:
+        """
         self._pq_prefix = pq_prefix
         self._log.debug(f"PowerQuery prefix set to {self._pq_prefix}")
 
     def _parse_pq_response(self, response: Response) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API._parse_pq_response
+        :param response:
+        :return:
+        """
         # Store the response as JSON
         response_json = response.json()
 
@@ -148,6 +188,12 @@ class API:
 
     # Run the given PowerQuery and return the results as a Pandas DataFrame
     def run_pq(self, pq_name: str, pq_parameters: Optional[dict] = None) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.run_pq
+        :param pq_name:
+        :param pq_parameters:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"PowerQuery {pq_name} not run because the API is not connected")
 
@@ -187,6 +233,13 @@ class API:
             return pd.DataFrame()
 
     def get_table_record(self, table_name: str, record_id: str | int, projection: str = '*') -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.get_table_record
+        :param table_name:
+        :param record_id:
+        :param projection:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Record {record_id} not retrieved from {table_name} because the API is not connected")
 
@@ -220,6 +273,12 @@ class API:
             return pd.DataFrame()
 
     def _parse_table_response(self, response: Response, table_name: str) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API._parse_table_response
+        :param response:
+        :param table_name:
+        :return:
+        """
         # Store the response as JSON
         response_json = response.json()
 
@@ -252,6 +311,17 @@ class API:
 
     def get_table_records(self, table_name: str, query_expression: str, projection: str = '*', page: int = 0,
                           pagesize: int = 0, sort: str = '', sortdescending: bool = False) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.get_table_records
+        :param table_name:
+        :param query_expression:
+        :param projection:
+        :param page:
+        :param pagesize:
+        :param sort:
+        :param sortdescending:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Records not retrieved from {table_name} because the API is not connected")
 
@@ -284,6 +354,12 @@ class API:
 
     # Insert records contained in the given Pandas DataFrame into the given table
     def insert_table_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.insert_table_records
+        :param table_name:
+        :param records:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Records not inserted into {table_name} because the API is not connected")
 
@@ -342,6 +418,13 @@ class API:
 
     # Update records contained in the given Pandas DataFrame in the given table
     def update_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.update_table_records
+        :param table_name:
+        :param id_column_name:
+        :param records:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Records not updated in {table_name} because the API is not connected")
 
@@ -400,6 +483,12 @@ class API:
 
     # Delete a record with the given ID from the given table
     def delete_table_record(self, table_name: str, record_id: str | int) -> bool:
+        """
+        TODO: Fill in the docstring for API.delete_table_record
+        :param table_name:
+        :param record_id:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Record {record_id} not deleted from {table_name} because the API is not connected")
 
@@ -427,6 +516,13 @@ class API:
 
     # Delete records contained in the given Pandas DataFrame from the given table
     def delete_table_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+        """
+        TODO: Fill in the docstring for API.delete_table_records
+        :param table_name:
+        :param id_column_name:
+        :param records:
+        :return:
+        """
         if not self._api_connected:
             self._log.error(f"Records not deleted from {table_name} because the API is not connected")
 
@@ -484,5 +580,9 @@ class API:
         return results
 
     def __del__(self):
+        """
+        TODO: Fill in the docstring for API.__del__
+        :return:
+        """
         self._log.debug('Closing API session')
         self.session.close()

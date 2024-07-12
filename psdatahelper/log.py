@@ -6,7 +6,18 @@ from email.message import EmailMessage
 
 
 class Log:
+    """
+    TODO: Fill in the docstring for Log
+    A class that simplifies logging and error reporting.
+    """
+
     def __init__(self, log_file_name: str, debug=False):
+        """
+        TODO: Fill in the docstring for Log.__init__
+        Initialize the Log object.
+        :param log_file_name:
+        :param debug:
+        """
         self._file_name = f'{log_file_name}.log'
         self._debug = debug
 
@@ -48,13 +59,21 @@ class Log:
         self._smtp_server = ''
         self._email_header = {
             'sender_address': '',
-            'sender_name': '',
-            'recipients': ''
+            'sender_name':    '',
+            'recipients':     ''
         }
 
         self._logger.debug("Logging initialized")
 
     def set_email_config(self, smtp_server: str, sender_address: str, sender_name: str, recipients: str):
+        """
+        TODO: Fill in the docstring for Log.set_email_config
+        :param smtp_server:
+        :param sender_address:
+        :param sender_name:
+        :param recipients:
+        :return:
+        """
         self._smtp_server = smtp_server
         self._email_header['sender_address'] = sender_address
         self._email_header['sender_name'] = sender_name
@@ -64,6 +83,11 @@ class Log:
                            f"{self._email_header}")
 
     def set_formatter(self, formatter: logging.Formatter):
+        """
+        TODO: Fill in the docstring for Log.set_formatter
+        :param formatter:
+        :return:
+        """
         self._formatter = formatter
         self._file_handler.setFormatter(self._formatter)
         self._text_handler.setFormatter(self._formatter)
@@ -74,30 +98,84 @@ class Log:
         self._logger.debug("Formatter set")
 
     def debug(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.debug
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.debug(msg, *args, **kwargs)
 
     def info(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.info
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.info(msg, *args, **kwargs)
 
     def warning(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.warning
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.warning(msg, *args, **kwargs)
 
     def error(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.error
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.error(msg, *args, **kwargs)
         self.has_errors = True
 
     def critical(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.critical
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.critical(msg, *args, **kwargs)
         self.has_errors = True
 
     def log(self, level, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.log
+        :param level:
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.log(level, msg, *args, **kwargs)
 
     def exception(self, msg: object, *args, **kwargs):
+        """
+        TODO: Fill in the docstring for Log.exception
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         self._logger.exception(msg, *args, **kwargs)
         self.has_errors = True
 
     def send_error_report(self):
+        """
+        TODO: Fill in the docstring for Log.send_error_report
+        :return:
+        """
         if self.has_errors:
             if self._smtp_server != '':
                 self._logger.debug("Sending error report")
