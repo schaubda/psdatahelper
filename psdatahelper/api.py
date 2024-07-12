@@ -360,6 +360,36 @@ class API:
 
             return pd.DataFrame()
 
+    def table_get_record_count(self, table_name: str, query_expression: str) -> int:
+        """
+        TODO: Fill in the docstring for API.get_table_record_count
+        :param table_name:
+        :param query_expression:
+        :return:
+        """
+        if not self._api_connected:
+            self._log.error(f"Record count not retrieved from {table_name} because the API is not connected")
+
+            return 0
+
+        self._log.debug(f"Getting record count from {table_name}")
+
+        response = self._request('get', resource=f"/ws/schema/table/{table_name}/count?q={query_expression}")
+
+        response_json = response.json()
+
+        if response.status_code != 200:
+            self._log.error(f"Error getting record count from {table_name}: {response.status_code} - {response.text}")
+
+            return 0
+
+        if 'count' in response_json:
+            return response_json['count']
+        else:
+            self._log.debug(f"No record count found in response from {table_name} with the provided query expression")
+
+            return 0
+
     # Insert records contained in the given Pandas DataFrame into the given table
     def table_insert_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
