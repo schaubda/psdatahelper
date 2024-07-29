@@ -87,3 +87,5 @@ fabric.properties
 /build/
 /dist/
 /psdatahelper.egg-info/
+/requirements_backup.txt
+/requirements.txt
