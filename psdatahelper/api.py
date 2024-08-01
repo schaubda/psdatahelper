@@ -912,3 +912,47 @@ class API:
 
         # Return the results DataFrame containing the status of each delete operation
         return results
+
+    def student_get(self, student_id: int) -> pd.DataFrame:
+        # Check if the API is connected before attempting to retrieve the record
+        if not self._api_connected:
+            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+
+            # Return an empty DataFrame if not connected
+            return pd.DataFrame()
+
+        # Log the attempt to get the specified record from the table
+        self._log.debug(f"Getting student with ID {student_id}")
+
+        # Send a GET request to retrieve the student record with the specified ID
+        response = self._request('get',
+                                 resource=f"/ws/v1/student/{student_id}")
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            # Log a message indicating that the record was found
+            self._log.debug('Record found')
+
+            # Parse the response as a JSON object
+            response_json = response.json()
+
+            # Create a dictionary with the student record
+            student_record = {
+                'id':                  response_json['student']['id'],
+                'student_number':      response_json['student']['local_id'],
+                'state_studentnumber': response_json['student']['state_province_id'],
+                'student_web_id':      response_json['student']['student_username'],
+                'first_name':          response_json['student']['name']['first_name'],
+                'middle_name':         response_json['student']['name']['middle_name'],
+                'last_name':           response_json['student']['name']['last_name']
+            }
+
+            # Return the student record as a DataFrame with the index set to 0
+            return pd.DataFrame(student_record, index=[0])
+
+        else:
+            # Log an error if the request was not successful
+            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+
+            # Return an empty DataFrame if the request fails
+            return pd.DataFrame()
