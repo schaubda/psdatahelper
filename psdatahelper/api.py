@@ -342,8 +342,8 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the results of the PowerQuery. If the query fails or the API is not connected,
-            an empty DataFrame is returned.
+            A DataFrame containing the results of the PowerQuery.
+            Returns an empty DataFrame if the query fails or the API is not connected.
         """
 
         # Check if the API is connected before running the PowerQuery
@@ -410,8 +410,9 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the requested record. Returns an empty DataFrame if the API is not connected,
-            if the record is not found, or if there is an error during the request.
+            A DataFrame containing the requested record.
+            Returns an empty DataFrame if the API is not connected, if the record is not found,
+            or if there is an error during the request.
         """
 
         # Check if the API is connected before attempting to retrieve the record
@@ -482,8 +483,8 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the requested records. Returns an empty DataFrame if the API is not connected
-            or if there is an error during the request.
+            A DataFrame containing the requested records.
+            Returns an empty DataFrame if the API is not connected or if there is an error during the request.
         """
 
         # Check if the API is connected before attempting to retrieve records
@@ -542,8 +543,9 @@ class API:
         Returns
         -------
         int
-            The count of records matching the query expression. Returns 0 if the API is not connected,
-            if there is an error during the request, or if no count is found in the response.
+            The count of records matching the query expression.
+            Returns 0 if the API is not connected, if there is an error during the request,
+            or if no count is found in the response.
         """
 
         # Check if the API is connected before attempting to retrieve the record count
@@ -914,6 +916,22 @@ class API:
         return results
 
     def student_get(self, student_id: int) -> pd.DataFrame:
+        """
+        Retrieve a specific student record by student ID.
+
+        Parameters
+        ----------
+        student_id : int
+            The unique identifier for the student whose record is to be retrieved.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the student's record.
+            Returns an empty DataFrame if the API is not connected,
+            if the request fails, or if the student record is not found.
+        """
+
         # Check if the API is connected before attempting to retrieve the record
         if not self._api_connected:
             self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
