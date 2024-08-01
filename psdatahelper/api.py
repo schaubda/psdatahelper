@@ -956,14 +956,20 @@ class API:
 
             # Create a dictionary with the student record
             student_record = {
-                'id':                  response_json['student']['id'],
-                'student_number':      response_json['student']['local_id'],
-                'state_studentnumber': response_json['student']['state_province_id'],
-                'student_web_id':      response_json['student']['student_username'],
-                'first_name':          response_json['student']['name']['first_name'],
-                'middle_name':         response_json['student']['name']['middle_name'],
-                'last_name':           response_json['student']['name']['last_name']
+                'id': response_json['student']['id'],
             }
+
+            if 'local_id' in response_json['student']:
+                student_record['student_number'] = response_json['student']['local_id']
+
+            if 'state_province_id' in response_json['student']:
+                student_record['state_studentnumber'] = response_json['student']['state_province_id']
+
+            if 'student_username' in response_json['student']:
+                student_record['student_web_id'] = response_json['student']['student_username']
+
+            for key, value in response_json['student']['name'].items():
+                student_record[key] = value
 
             # Return the student record as a DataFrame with the index set to 0
             return pd.DataFrame(student_record, index=[0])
