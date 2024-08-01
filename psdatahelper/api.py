@@ -39,7 +39,6 @@ class API:
         Delete multiple records contained in the given Pandas DataFrame from the given table.
     """
 
-    # TODO: Refactor checks to reduce nesting
     def __init__(self, credential: Credential, log: Log = Log('ps_api')):
         """
         Initialize the API instance and connect to the PowerSchool API.
@@ -65,40 +64,43 @@ class API:
         self._EMPTY_DF_LOG_MSG = 'Input DataFrame is empty. No records processed.'
 
         # Check if the credentials have been loaded successfully
-        if self._credential.loaded:
-            try:
-                # Create an OAuth2 session using the client ID and access token from the credentials
-                self.session = OAuth2Session(
-                        client=BackendApplicationClient(client_id=self._credential.fields['client_id']),
-                        token={
-                            'token_type':   'Bearer',
-                            'access_token': self._credential.fields['access_token']
-                        }
-                )
-
-            except InvalidClientError as e:
-                # Log an error if there is an invalid client error during connection
-                self._log.error(f"Error connecting to the PowerSchool API: {e}")
-
-            except Exception as e:
-                # Log any other errors that occur during the connection attempt
-                self._log.error(f"Error connecting to the PowerSchool API: {e}")
-
-            else:
-                # Log a debug message indicating successful connection to the API
-                self._log.debug('Connected to the PowerSchool API')
-
-                # Set the headers for the API session
-                self.session.headers = {
-                    'Content-Type': 'application/json',
-                    'Accept':       'application/json'
-                }
-
-                # Mark the API as connected
-                self._api_connected = True
-        else:
+        if not self._credential.loaded:
             # Log an error if the API cannot connect due to unloaded credentials
             self._log.error('API not connected because credentials are not loaded')
+
+            # Exit the function if credentials are not loaded
+            return
+
+        try:
+            # Create an OAuth2 session using the client ID and access token from the credentials
+            self.session = OAuth2Session(
+                    client=BackendApplicationClient(client_id=self._credential.fields['client_id']),
+                    token={
+                        'token_type':   'Bearer',
+                        'access_token': self._credential.fields['access_token']
+                    }
+            )
+
+        except InvalidClientError as e:
+            # Log an error if there is an invalid client error during connection
+            self._log.error(f"Error connecting to the PowerSchool API: {e}")
+
+        except Exception as e:
+            # Log any other errors that occur during the connection attempt
+            self._log.error(f"Error connecting to the PowerSchool API: {e}")
+
+        else:
+            # Log a debug message indicating successful connection to the API
+            self._log.debug('Connected to the PowerSchool API')
+
+            # Set the headers for the API session
+            self.session.headers = {
+                'Content-Type': 'application/json',
+                'Accept':       'application/json'
+            }
+
+            # Mark the API as connected
+            self._api_connected = True
 
     def __del__(self):
         """
@@ -206,7 +208,6 @@ class API:
         # Return the HTTP response object
         return response
 
-    # TODO: Refactor checks to reduce nesting
     def _pq_parse_response(self, response: Response) -> pd.DataFrame:
         # Parse the JSON response from the PowerQuery API
         response_json = response.json()
@@ -252,7 +253,6 @@ class API:
             # Return an empty DataFrame if no records are found
             return pd.DataFrame()
 
-    # TODO: Refactor checks to reduce nesting
     def _table_parse_response(self, response: Response, table_name: str) -> pd.DataFrame:
         # Parse the JSON response from the API for a specific table
         response_json = response.json()

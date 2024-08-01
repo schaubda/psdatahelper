@@ -294,7 +294,6 @@ class Log:
         # Indicate that an error has occurred by setting the has_errors flag to True
         self.has_errors = True
 
-    # TODO: Refactor checks to reduce nesting
     def send_error_report(self):
         """
         Send an error report via email if any errors have been logged.
@@ -305,41 +304,52 @@ class Log:
             If there is an error sending the error report email.
         """
 
-        # Check if there are any logged errors
-        if self.has_errors:
-            # Ensure that an SMTP server is configured
-            if self._smtp_server != '':
-                self._logger.debug("Sending error report")
+        # Check if there are any errors to report
+        if not self.has_errors:
+            self._logger.debug("No errors to report")
 
-                # Create a new EmailMessage object for the email
-                msg = EmailMessage()
+            # If no errors are logged, return without sending an email
+            return
 
-                # Set the From, To, and Subject headers, and the message body
-                msg['From'] = formataddr(
-                        (self._email_header['sender_name'], self._email_header['sender_address']))
-                msg['To'] = self._email_header['recipients']
-                msg['Subject'] = f"Error Report for {self._file_name}"
-                msg.set_content(self.text.getvalue())
+        # Ensure that an SMTP server is configured
+        if not self._smtp_server:
+            # Log an error if no SMTP server is specified
+            self._logger.error("No SMTP server specified")
+            self.has_errors = True
 
-                try:
-                    # Send the email using SMTP
-                    with smtplib.SMTP(self._smtp_server) as s:
-                        s.send_message(msg)
+            # If no SMTP server is specified, return without sending an email
+            return
 
-                except Exception as e:
-                    # Log an error if sending the email fails
-                    self._logger.error(f"Error sending error report: {e}")
-                    self.has_errors = True
+        if not self._email_header['sender_address'] or not self._email_header['recipients']:
+            # Log an error if sender address or recipients are missing
+            self._logger.error("Sender address or recipients not specified")
+            self.has_errors = True
 
-                else:
-                    # Log success if the email was sent successfully
-                    self._logger.debug("Error report sent successfully")
+            # If sender address or recipients are missing, return without sending an email
+            return
 
-            else:
-                # Log an error if no SMTP server is specified
-                self._logger.error("No SMTP server specified")
-                self.has_errors = True
+        self._logger.debug("Sending error report")
+
+        # Create a new EmailMessage object for the email
+        msg = EmailMessage()
+
+        # Set the From, To, and Subject headers, and the message body
+        msg['From'] = formataddr(
+                (self._email_header['sender_name'], self._email_header['sender_address']))
+        msg['To'] = self._email_header['recipients']
+        msg['Subject'] = f"Error Report for {self._file_name}"
+        msg.set_content(self.text.getvalue())
+
+        try:
+            # Send the email using SMTP
+            with smtplib.SMTP(self._smtp_server) as s:
+                s.send_message(msg)
+
+        except Exception as e:
+            # Log an error if sending the email fails
+            self._logger.error(f"Error sending error report: {e}")
+            self.has_errors = True
 
         else:
-            # Log that there are no errors to report
-            self._logger.debug("No errors to report")
+            # Log success if the email was sent successfully
+            self._logger.debug("Error report sent successfully")

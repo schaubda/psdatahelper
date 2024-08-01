@@ -131,7 +131,6 @@ class Report:
         # Log a debug message indicating that the attachment has been added
         self._log.debug(f"Attachment added.\n\tAttachment: {attachment}")
 
-    # TODO: Refactor checks to reduce nesting
     def send_email(self):
         """
         Send the report email with any attachments.
@@ -149,52 +148,54 @@ class Report:
         for setting_name, setting_value in self._email_settings.items():
             if len(setting_value) == 0:
                 bad_settings = True
+
                 # Log an error for each missing email setting
                 self._log.error(f"Email setting not set: {setting_name}")
 
-        # Proceed only if all email settings are valid
-        if not bad_settings:
-            self._log.debug("Sending report")
+        if bad_settings:
+            # Log an error if any email settings are missing
+            self._log.error("Report not sent due to missing email settings")
 
-            # Create a new EmailMessage object for the email
-            email_message = EmailMessage()
+            # Exit the method early if any email settings are missing
+            return
 
-            # Set the email headers and content using the configured settings
-            email_message['From'] = formataddr(
-                    (self._email_settings['sender_name'], self._email_settings['sender_address']))
-            email_message['To'] = self._email_settings['recipients']
-            email_message['Subject'] = self._email_header['subject']
-            email_message.set_content(self._report_body)
+        self._log.debug("Sending report")
 
-            # Add any specified attachments to the email
-            for attachment in self._email_header['attachments']:
-                try:
-                    # Open the attachment file and read its content
-                    with open(attachment, 'rb') as file:
-                        email_message.add_attachment(file.read(), maintype='application', subtype='octet-stream',
-                                                     filename=attachment)
+        # Create a new EmailMessage object for the email
+        email_message = EmailMessage()
 
-                except FileNotFoundError:
-                    # Log an error if the attachment file is not found
-                    self._log.error(f"Attachment not found: {attachment}")
+        # Set the email headers and content using the configured settings
+        email_message['From'] = formataddr(
+                (self._email_settings['sender_name'], self._email_settings['sender_address']))
+        email_message['To'] = self._email_settings['recipients']
+        email_message['Subject'] = self._email_header['subject']
+        email_message.set_content(self._report_body)
 
-                else:
-                    # Log a debug message indicating the attachment was loaded successfully
-                    self._log.debug(f"Attachment loaded: {attachment}")
-
-            # Attempt to send the email using the configured SMTP server
+        # Add any specified attachments to the email
+        for attachment in self._email_header['attachments']:
             try:
-                with smtplib.SMTP(self._email_settings['smtp_server']) as smtp:
-                    smtp.send_message(email_message)
+                # Open the attachment file and read its content
+                with open(attachment, 'rb') as file:
+                    email_message.add_attachment(file.read(), maintype='application', subtype='octet-stream',
+                                                 filename=attachment)
 
-            except Exception as e:
-                # Log any exceptions that occur during the sending process
-                self._log.exception(f"Error sending report: {e}")
+            except FileNotFoundError:
+                # Log an error if the attachment file is not found
+                self._log.error(f"Attachment not found: {attachment}")
 
             else:
-                # Log a debug message indicating the report was sent successfully
-                self._log.debug("Report sent")
-                
+                # Log a debug message indicating the attachment was loaded successfully
+                self._log.debug(f"Attachment loaded: {attachment}")
+
+        # Attempt to send the email using the configured SMTP server
+        try:
+            with smtplib.SMTP(self._email_settings['smtp_server']) as smtp:
+                smtp.send_message(email_message)
+
+        except Exception as e:
+            # Log any exceptions that occur during the sending process
+            self._log.exception(f"Error sending report: {e}")
+
         else:
-            # Log an error if the report could not be sent due to missing settings
-            self._log.error("Report not sent due to missing email settings")
+            # Log a debug message indicating the report was sent successfully
+            self._log.debug("Report sent")

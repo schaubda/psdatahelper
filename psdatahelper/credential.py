@@ -46,7 +46,6 @@ class Credential:
         Return a string representation of the Credential object.
     """
 
-    # TODO: Refactor checks to reduce nesting
     def __init__(self, server_address: str, plugin: str, cred_type=CredentialType.API, log=Log('credential')):
         """
         Initialize the Credential instance.
@@ -63,6 +62,13 @@ class Credential:
             The Log instance to use for logging (default is Log('credential')).
         """
 
+        # Log an error if the server address is not provided
+        if not server_address:
+            log.error("Server address not provided. Unable to load credentials.")
+
+            # Exit the function early if the server address is missing
+            return
+
         # Store the provided parameters in instance variables
         self._plugin = plugin
         self._cred_type = cred_type
@@ -75,51 +81,17 @@ class Credential:
         self.fields = {}
         self.loaded = False
 
-        # Handle API credential type initialization
-        if self._cred_type == CredentialType.API:
-            # Clean up the server address by removing protocol and trailing slashes
-            self.server_address = re.sub(r"^https?://", "", server_address)
-            self.server_address = re.sub(r"/+$", "", self.server_address)
-            self.server_address = f"https://{self.server_address}"
+        # Check the credential type and initialize the credentials accordingly
+        match self._cred_type:
+            case CredentialType.API:
+                self._initialize_api_credentials()
 
-            # Define required API fields
-            api_fields = {
-                'client_id':     None,
-                'client_secret': None,
-                'access_token':  None
-            }
+            case CredentialType.ODBC:
+                self._initialize_odbc_credentials()
 
-            # Update the fields dictionary with API fields
-            self.fields.update(api_fields)
-
-            # Load API credentials if a plugin is specified
-            if self._plugin:
-                self._load_api_credentials()
-
-                # Check if client ID and secret are provided
-                if self.fields['client_id'] and self.fields['client_secret']:
-                    self._get_api_access_token()
-
-                    # If access token is obtained, save credentials and mark as loaded
-                    if self.fields['access_token']:
-                        self._save_api_credentials()
-                        self.loaded = True
-
-                else:
-                    # Log an error if client ID or secret is missing
-                    self._log.error("Client ID or client secret not provided. Unable to store credentials.")
-
-            else:
-                # Log an error if the plugin name is not provided
-                self._log.error("Plugin name not provided. Unable to load credentials.")
-
-        # Handle ODBC credential type (not yet implemented)
-        elif self._cred_type == CredentialType.ODBC:
-            self._log.error("ODBC credential type not yet implemented")
-
-        # Log an error for invalid credential types
-        else:
-            self._log.error("Invalid credential type specified")
+            # Log an error if an invalid credential type is specified
+            case _:
+                self._log.error("Invalid credential type specified")
 
     def __repr__(self):
         """
@@ -140,6 +112,48 @@ class Credential:
         else:
             # Return a simpler representation for ODBC credentials
             return f"Credential(server_name='{self.server_name}', cred_type='{self._cred_type}')"
+
+    def _initialize_api_credentials(self):
+        # Log an error if the plugin name is not provided
+        if not self._plugin:
+            self._log.error("Plugin name not provided. Unable to load credentials.")
+
+            return
+
+        # Clean up the server address by removing protocol and trailing slashes
+        self.server_address = re.sub(r"^https?://", "", self.server_address)
+        self.server_address = re.sub(r"/+$", "", self.server_address)
+        self.server_address = f"https://{self.server_address}"
+
+        # Define required API fields
+        api_fields = {
+            'client_id':     None,
+            'client_secret': None,
+            'access_token':  None
+        }
+
+        # Update the fields dictionary with API fields
+        self.fields.update(api_fields)
+
+        # Load API credentials from secure storage
+        self._load_api_credentials()
+
+        # Check if client ID and secret are provided
+        if self.fields['client_id'] and self.fields['client_secret']:
+            self._get_api_access_token()
+
+            # If access token is obtained, save credentials and mark as loaded
+            if self.fields['access_token']:
+                self._save_api_credentials()
+                self.loaded = True
+
+        else:
+            # Log an error if client ID or secret is missing
+            self._log.error("Client ID or client secret not provided. Unable to store credentials.")
+
+    def _initialize_odbc_credentials(self):
+        # Log an error to indicate ODBC credentials are not yet implemented
+        self._log.error("ODBC credential type not yet implemented")
 
     def _load_api_credentials(self):
         # Attempt to load API credentials from a secure storage
