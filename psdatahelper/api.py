@@ -195,7 +195,8 @@ class API:
             # If there are access requests, log an error unless suppressed
             if access_requests:
                 if not suppress_log:
-                    self._log.error(f"Plugin doesn't have access to one or more of the requested fields.\n"
+                    self._log.error(f"Plugin {self._credential.plugin} doesn't have access to one or more of the "
+                                    f"requested fields.\n"
                                     f"Access requests to add to the plugin:{''.join(access_requests)}")
 
                 # Attach the access requests to the response object

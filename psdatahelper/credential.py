@@ -69,13 +69,13 @@ class Credential:
             # Exit the function early if the server address is missing
             return
 
-        # Store the provided parameters in instance variables
-        self._plugin = plugin
+        # Initialize private attributes
         self._cred_type = cred_type
         self._log = log
         self._session = None
 
-        # Initialize server-related attributes
+        # Initialize public attributes
+        self.plugin = plugin
         self.server_name = server_address
         self.server_address = server_address
         self.fields = {}
@@ -106,7 +106,7 @@ class Credential:
         # Check if the credential type is API
         if self._cred_type == CredentialType.API:
             # Return a detailed representation including server name, plugin, and credential type
-            return (f"Credential(server_name='{self.server_name}', plugin='{self._plugin}', "
+            return (f"Credential(server_name='{self.server_name}', plugin='{self.plugin}', "
                     f"cred_type='{self._cred_type}')")
 
         else:
@@ -115,7 +115,7 @@ class Credential:
 
     def _initialize_api_credentials(self):
         # Log an error if the plugin name is not provided
-        if not self._plugin:
+        if not self.plugin:
             self._log.error("Plugin name not provided. Unable to load credentials.")
 
             return
@@ -158,11 +158,11 @@ class Credential:
     def _load_api_credentials(self):
         # Attempt to load API credentials from a secure storage
         try:
-            self.fields.update(json.loads(kr.get_password(self.server_name, self._plugin)))
+            self.fields.update(json.loads(kr.get_password(self.server_name, self.plugin)))
 
         except Exception:
             # Log a debug message if no credentials are found for the specified plugin
-            self._log.debug(f"No credentials found for plugin {self._plugin} on "
+            self._log.debug(f"No credentials found for plugin {self.plugin} on "
                             f"{self.server_address}.")
 
         # Check if client_id and client_secret are missing
@@ -170,23 +170,23 @@ class Credential:
             # Prompt for client_id if it is not provided
             while not self.fields['client_id']:
                 self.fields['client_id'] = (
-                    getpass.getpass(f"No client_id found for plugin {self._plugin} on {self.server_name}. "
+                    getpass.getpass(f"No client_id found for plugin {self.plugin} on {self.server_name}. "
                                     f"Please enter: "))
 
             # Prompt for client_secret if it is not provided
             while not self.fields['client_secret']:
                 self.fields['client_secret'] = (
-                    getpass.getpass(f"No client_secret found for plugin {self._plugin} on {self.server_name}. "
+                    getpass.getpass(f"No client_secret found for plugin {self.plugin} on {self.server_name}. "
                                     f"Please enter: "))
 
             # Store the entered credentials securely
-            kr.set_password(self.server_name, self._plugin, json.dumps(self.fields))
+            kr.set_password(self.server_name, self.plugin, json.dumps(self.fields))
             # Log a debug message indicating that credentials have been stored
             self._log.debug("Credentials stored")
 
     def _save_api_credentials(self):
         # Store the API credentials securely using the specified server name and plugin
-        kr.set_password(self.server_name, self._plugin, json.dumps(self.fields))
+        kr.set_password(self.server_name, self.plugin, json.dumps(self.fields))
 
         # Log a debug message indicating that the credentials have been successfully stored
         self._log.debug("Credentials stored")
