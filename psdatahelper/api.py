@@ -947,36 +947,84 @@ class API:
                                  resource=f"/ws/v1/student/{student_id}")
 
         # Check if the request was successful
-        if response.status_code == 200:
-            # Log a message indicating that the record was found
-            self._log.debug('Record found')
-
-            # Parse the response as a JSON object
-            response_json = response.json()
-
-            # Create a dictionary with the student record
-            student_record = {
-                'id': response_json['student']['id'],
-            }
-
-            if 'local_id' in response_json['student']:
-                student_record['student_number'] = response_json['student']['local_id']
-
-            if 'state_province_id' in response_json['student']:
-                student_record['state_studentnumber'] = response_json['student']['state_province_id']
-
-            if 'student_username' in response_json['student']:
-                student_record['student_web_id'] = response_json['student']['student_username']
-
-            for key, value in response_json['student']['name'].items():
-                student_record[key] = value
-
-            # Return the student record as a DataFrame with the index set to 0
-            return pd.DataFrame(student_record, index=[0])
-
-        else:
+        if response.status_code != 200:
             # Log an error if the request was not successful
             self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.DataFrame()
+
+        # Log a message indicating that the record was found
+        self._log.debug('Record found')
+
+        # Parse the response as a JSON object
+        response_json = response.json()
+
+        # Create a dictionary with the student record
+        student_record = {
+            'id': response_json['student']['id'],
+        }
+
+        # Copy optional fields to the student record dictionary if they contain values
+        if 'local_id' in response_json['student']:
+            student_record['student_number'] = response_json['student']['local_id']
+
+        if 'state_province_id' in response_json['student']:
+            student_record['state_studentnumber'] = response_json['student']['state_province_id']
+
+        if 'student_username' in response_json['student']:
+            student_record['student_web_id'] = response_json['student']['student_username']
+
+        for key, value in response_json['student']['name'].items():
+            student_record[key] = value
+
+        # Return the student record as a DataFrame with the index set to 0
+        return pd.DataFrame(student_record, index=[0])
+
+    def student_get_expansions(self, student_id: int) -> pd.Series:
+        """
+        Retrieve the expansions for a specific student by student ID.
+
+        Parameters
+        ----------
+        student_id : int
+            The unique identifier for the student whose expansions are to be retrieved.
+
+        Returns
+        -------
+        pd.Series
+            A Series containing the expansions for the student.
+            Returns an empty Series if the API is not connected, if the request fails,
+            or if the student record is not found.
+        """
+
+        # Check if the API is connected before attempting to retrieve the record
+        if not self._api_connected:
+            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+
+            # Return an empty list if not connected
+            return pd.Series()
+
+        # Log the attempt to get the specified record from the table
+        self._log.debug(f"Getting expansions for student with ID {student_id}")
+
+        # Send a GET request to retrieve the student record with the specified ID
+        response = self._request('get',
+                                 resource=f"/ws/v1/student/{student_id}")
+
+        # Check if the request was successful
+        if response.status_code != 200:
+            # Log an error if the request was not successful
+            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+
+            # Return an empty DataFrame if the request fails
+            return pd.Series()
+
+        # Log a message indicating that the record was found
+        self._log.debug('Record found')
+
+        # Parse the response as a JSON object
+        response_json = response.json()
+
+        # Return the expansions for the student
+        return pd.Series(response_json['student']['@expansions'].split(', '), name='expansions')
