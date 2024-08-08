@@ -394,6 +394,7 @@ class API:
             # Return an empty DataFrame if the query fails
             return pd.DataFrame()
 
+    # TODO: Refactor to use _table_parse_response method
     def table_get_record(self, table_name: str, record_id: str | int, projection: str = '*') -> pd.DataFrame:
         """
         Retrieve a specific record from a table.
@@ -584,7 +585,6 @@ class API:
             # Return 0 if no count is found
             return 0
 
-    # Insert records contained in the given Pandas DataFrame into the given table
     def table_insert_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         Insert multiple records into a specified table.
@@ -915,7 +915,7 @@ class API:
         # Return the results DataFrame containing the status of each delete operation
         return results
 
-    def student_get(self, student_id: int) -> pd.DataFrame:
+    def student_get(self, student_id: int, expansions: list[str] | pd.Series = pd.Series()) -> pd.DataFrame:
         """
         Retrieve a specific student record by student ID.
 
@@ -939,12 +939,39 @@ class API:
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
 
+        # Check if the expansions parameter is a Pandas Series
+        if isinstance(expansions, pd.Series):
+            # Convert the Pandas Series to a list
+            expansions_list = expansions.tolist()
+
+        else:
+            expansions_list = expansions
+
+        # Check if the provided expansions is a list of strings
+        for item in expansions_list:
+            if not isinstance(item, str):
+                # Log an error if the expansions parameter is not a list of strings
+                self._log.error("Expansions parameter must be a list of strings or a Pandas Series of strings")
+
+                # Return an empty DataFrame if the expansions parameter is invalid
+                return pd.DataFrame()
+
+        # Convert the list of expansions to a comma-separated string
+        expansions_string = ','.join(expansions_list)
+
         # Log the attempt to get the specified record from the table
         self._log.debug(f"Getting student with ID {student_id}")
 
+        if expansions_string:
+            # Log the expansions that will be included in the request
+            self._log.debug(f"With expansions: {expansions_string}")
+
+            # Append the expansions to the resource URL
+            expansions_string = f"?expansions={expansions_string}"
+
         # Send a GET request to retrieve the student record with the specified ID
         response = self._request('get',
-                                 resource=f"/ws/v1/student/{student_id}")
+                                 resource=f"/ws/v1/student/{student_id}{expansions_string}")
 
         # Check if the request was successful
         if response.status_code != 200:
@@ -957,29 +984,8 @@ class API:
         # Log a message indicating that the record was found
         self._log.debug('Record found')
 
-        # Parse the response as a JSON object
-        response_json = response.json()
-
-        # Create a dictionary with the student record
-        student_record = {
-            'id': response_json['student']['id'],
-        }
-
-        # Copy optional fields to the student record dictionary if they contain values
-        if 'local_id' in response_json['student']:
-            student_record['student_number'] = response_json['student']['local_id']
-
-        if 'state_province_id' in response_json['student']:
-            student_record['state_studentnumber'] = response_json['student']['state_province_id']
-
-        if 'student_username' in response_json['student']:
-            student_record['student_web_id'] = response_json['student']['student_username']
-
-        for key, value in response_json['student']['name'].items():
-            student_record[key] = value
-
-        # Return the student record as a DataFrame with the index set to 0
-        return pd.DataFrame(student_record, index=[0])
+        # Return the student record as a DataFrame without the expansions and extensions columns
+        return pd.json_normalize(response.json()['student']).drop(columns=['@expansions', '@extensions'])
 
     def student_get_expansions(self, student_id: int) -> pd.Series:
         """
