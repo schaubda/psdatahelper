@@ -258,6 +258,23 @@ class API:
             # Return an empty DataFrame if no records are found
             return pd.DataFrame()
 
+    def _students_get_cuids(self) -> pd.DataFrame:
+        if not self._api_connected:
+            self._log.error("API not connected. Unable to retrieve student CUIDs.")
+
+            return pd.DataFrame()
+
+        self._log.debug('Retrieving student client UIDs')
+
+        pq_prefix_backup = self._pq_prefix
+        self.pq_set_prefix('com.pearson.core.student')
+        cuids = self.pq_run('student_dcid_id_map')
+        self.pq_set_prefix(pq_prefix_backup)
+
+        cuids = cuids.drop('_name', axis=1).rename(columns={'_id': 'client_uid'})
+
+        return cuids
+
     def _table_parse_response(self, response: Response, table_name: str) -> pd.DataFrame:
         # Parse the JSON response from the API for a specific table
         response_json = response.json()
