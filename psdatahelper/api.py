@@ -1,3 +1,6 @@
+# TODO: Implement proper access denied logging on all API operation methods
+# TODO: Update documentation with usage details
+
 import pandas as pd
 import json
 from .credential import Credential
@@ -113,6 +116,7 @@ class API:
         # Close the API session to release resources
         self.session.close()
 
+    # TODO: Implement conditional parsing to account for differences between PowerQuery and table request results
     def _access_requests_parse(self, response: Response, read_only: bool = True) -> list[str]:
         # Check if the response status code indicates a forbidden access (403)
         if response.status_code == 403:
@@ -585,6 +589,7 @@ class API:
             # Return 0 if no count is found
             return 0
 
+    # TODO: Convert columns in input DataFrame to strings before sending to API
     def table_insert_records(self, table_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         Insert multiple records into a specified table.
@@ -671,6 +676,7 @@ class API:
         # Return the results DataFrame containing the status of each insert operation
         return results
 
+    # TODO: Convert columns in input DataFrame to strings before sending to API
     def table_update_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
         """
         Update multiple records in a specified table.
@@ -915,7 +921,10 @@ class API:
         # Return the results DataFrame containing the status of each delete operation
         return results
 
-    def student_get(self, student_id: int, expansions: list[str] | pd.Series = pd.Series()) -> pd.DataFrame:
+    # TODO: Add support for retrieving extension data
+    def student_get(self, student_id: int,
+                    expansions: list[str] | pd.Series = pd.Series(),
+                    extensions: list[str] | pd.Series = pd.Series()) -> pd.DataFrame:
         """
         Retrieve a specific student record by student ID.
 
@@ -959,6 +968,25 @@ class API:
         # Convert the list of expansions to a comma-separated string
         expansions_string = ','.join(expansions_list)
 
+        # Check if the extensions parameter is a Pandas Series
+        if isinstance(extensions, pd.Series):
+            extensions_list = extensions.tolist()
+
+        else:
+            extensions_list = extensions
+
+        # Check if the provided extensions is a list of strings
+        for item in extensions_list:
+            if not isinstance(item, str):
+                # Log an error if the extensions parameter is not a list of strings
+                self._log.error("Extensions parameter must be a list of strings or a Pandas Series of strings")
+
+                # Return an empty DataFrame if the extensions parameter is invalid
+                return pd.DataFrame()
+
+        # Convert the list of extensions to a comma-separated string
+        extensions_string = ','.join(extensions_list)
+
         # Log the attempt to get the specified record from the table
         self._log.debug(f"Getting student with ID {student_id}")
 
@@ -966,7 +994,7 @@ class API:
             # Log the expansions that will be included in the request
             self._log.debug(f"With expansions: {expansions_string}")
 
-            # Append the expansions to the resource URL
+            # Format the expansions string for the resource URL
             expansions_string = f"?expansions={expansions_string}"
 
         # Send a GET request to retrieve the student record with the specified ID
@@ -1034,3 +1062,51 @@ class API:
 
         # Return the expansions for the student
         return pd.Series(response_json['student']['@expansions'].split(', '), name='expansions')
+
+    def student_get_extensions(self, student_id: int) -> pd.Series:
+        """
+        Retrieve the schema extensions for a specific student by student ID.
+
+        Parameters
+        ----------
+        student_id : int
+            The unique identifier for the student whose extensions are to be retrieved.
+
+        Returns
+        -------
+        pd.Series
+            A Series containing the extensions for the student.
+            Returns an empty Series if the API is not connected, if the request fails,
+            or if the student record is not found.
+        """
+
+        # Check if the API is connected before attempting to retrieve the record
+        if not self._api_connected:
+            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+
+            # Return an empty list if not connected
+            return pd.Series()
+
+        # Log the attempt to get the specified record from the table
+        self._log.debug(f"Getting extensions for student with ID {student_id}")
+
+        # Send a GET request to retrieve the student record with the specified ID
+        response = self._request('get',
+                                 resource=f"/ws/v1/student/{student_id}")
+
+        # Check if the request was successful
+        if response.status_code != 200:
+            # Log an error if the request was not successful
+            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+
+            # Return an empty DataFrame if the request fails
+            return pd.Series()
+
+        # Log a message indicating that the record was found
+        self._log.debug('Record found')
+
+        # Parse the response as a JSON object
+        response_json = response.json()
+
+        # Return the extensions for the student
+        return pd.Series(response_json['student']['@extensions'].split(','), name='extensions')

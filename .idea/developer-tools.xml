@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DeveloperToolsToolWindowSettingsV1" lastSelectedContentNodeId="json-schema-validator">
+    <developerToolsConfigurations>
+      <developerToolConfiguration developerToolId="json-schema-validator" id="5093132f-24cc-4362-98f6-56561a5e34ca" name="Workbench">
+        <properties>
+          <property key="dataText" type="INPUT" value="kotlin.String|{&#10;  &quot;firstName&quot;: &quot;John&quot;,&#10;  &quot;lastName&quot;: &quot;Doe&quot;,&#10;  &quot;age&quot;: 21&#10;}" />
+          <property key="schemaText" type="INPUT" value="kotlin.String|{&#10;  &quot;$id&quot;: &quot;https://example.com/person.schema.json&quot;,&#10;  &quot;$schema&quot;: &quot;https://json-schema.org/draft/2020-12/schema&quot;,&#10;  &quot;title&quot;: &quot;Person&quot;,&#10;  &quot;type&quot;: &quot;object&quot;,&#10;  &quot;properties&quot;: {&#10;    &quot;firstName&quot;: {&#10;      &quot;type&quot;: &quot;string&quot;,&#10;      &quot;description&quot;: &quot;The person's first name.&quot;&#10;    },&#10;    &quot;lastName&quot;: {&#10;      &quot;type&quot;: &quot;string&quot;,&#10;      &quot;description&quot;: &quot;The person's last name.&quot;&#10;    },&#10;    &quot;age&quot;: {&#10;      &quot;description&quot;: &quot;Age in years which must be equal to or greater than zero.&quot;,&#10;      &quot;type&quot;: &quot;integer&quot;,&#10;      &quot;minimum&quot;: 0&#10;    }&#10;  }&#10;}" />
+        </properties>
+      </developerToolConfiguration>
+      <developerToolConfiguration developerToolId="json-path" id="143bd7e2-bd1e-402f-a7af-16fabc5592ff" name="Workbench">
+        <properties>
+          <property key="sourceText" type="INPUT" value="kotlin.String|{&#10;  &quot;starWars&quot;: {&#10;    &quot;characters&quot;: [&#10;      {&#10;        &quot;forename&quot;: &quot;Luke&quot;,&#10;        &quot;surname&quot;: &quot;Skywalker&quot;,&#10;        &quot;birthdate&quot;: &quot;19 BBY&quot;,&#10;        &quot;homeWorld&quot;: &quot;Tatooine&quot;&#10;      },&#10;      {&#10;        &quot;forename&quot;: &quot;Leia&quot;,&#10;        &quot;surname&quot;: &quot;Organa&quot;,&#10;        &quot;birthdate&quot;: &quot;19 BBY&quot;,&#10;        &quot;homeWorld&quot;: &quot;Alderaan&quot;&#10;      },&#10;      {&#10;        &quot;forename&quot;: &quot;Ben&quot;,&#10;        &quot;surname&quot;: &quot;Solo&quot;,&#10;        &quot;birthdate&quot;: &quot;5 ABY&quot;,&#10;        &quot;homeWorld&quot;: &quot;Chandrila&quot;&#10;      }&#10;    ],&#10;    &quot;ships&quot;: [&#10;      {&#10;        &quot;type&quot;: &quot;Imperial Star Destroyer&quot;,&#10;        &quot;class&quot;: &quot;Carrier&quot;&#10;      },&#10;      {&#10;        &quot;type&quot;: &quot;X-Wing Starfighter&quot;,&#10;        &quot;class&quot;: &quot;Space superiority fighter&quot;&#10;      }&#10;    ]&#10;  }&#10;}" />
+          <property key="contentText" type="INPUT" value="kotlin.String|$.starWars.characters..forename" />
+        </properties>
+      </developerToolConfiguration>
+    </developerToolsConfigurations>
+    <expandedGroupNodeIds>
+      <expandedGroupNodeId value="cryptography" />
+      <expandedGroupNodeId value="encoder-decoder" />
+      <expandedGroupNodeId value="formatting" />
+      <expandedGroupNodeId value="text" />
+    </expandedGroupNodeIds>
+  </component>
+</project>
