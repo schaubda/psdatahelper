@@ -55,7 +55,9 @@ class Report:
         # Log a debug message indicating that the reporting instance has been initialized
         self._log.debug("Reporting initialized")
 
-    def set_email_settings(self, smtp_server: str, sender_address: str, sender_name: str, recipients: str):
+    # TODO: Rename to set_email_config for consistency with Log class
+    def set_email_settings(self, smtp_server: str, sender_address: str, sender_name: str,
+                           recipients: str):
         """
         Set the email configuration for sending reports.
 
@@ -78,10 +80,11 @@ class Report:
         self._email_settings['recipients'] = recipients
 
         # Log the updated email configuration for debugging purposes
-        self._log.debug(f"Email configuration set.\n\tSMTP Server: {self._email_settings['smtp_server']}\n"
-                        f"\tSender address: {self._email_settings['sender_address']}\n"
-                        f"\tSender name: {self._email_settings['sender_name']}\n"
-                        f"\tRecipients: {self._email_settings['recipients']}")
+        self._log.debug(
+            f"Email configuration set.\n\tSMTP Server: {self._email_settings['smtp_server']}\n"
+            f"\tSender address: {self._email_settings['sender_address']}\n"
+            f"\tSender name: {self._email_settings['sender_name']}\n"
+            f"\tRecipients: {self._email_settings['recipients']}")
 
     def set_email_subject(self, subject: str):
         """
@@ -176,7 +179,8 @@ class Report:
             try:
                 # Open the attachment file and read its content
                 with open(attachment, 'rb') as file:
-                    email_message.add_attachment(file.read(), maintype='application', subtype='octet-stream',
+                    email_message.add_attachment(file.read(), maintype='application',
+                                                 subtype='octet-stream',
                                                  filename=attachment)
 
             except FileNotFoundError:

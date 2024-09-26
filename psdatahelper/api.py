@@ -1,9 +1,15 @@
 # TODO: Implement proper access denied logging on all API operation methods
 # TODO: Update documentation with usage details
+# TODO: Create API not connected message generation method with details on failed operation
+# TODO: Create API connection validation method
+# TODO: Create input DataFrame validation method
+# TODO: Separate resources into individual classes, with API class containing instances of
+#  resource classes
 
 import pandas as pd
 import json
 from .credential import Credential
+from .datatools import DataTools as dt
 from .log import Log
 from oauthlib.oauth2 import BackendApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InvalidClientError
@@ -28,7 +34,8 @@ class API:
         Run the given PowerQuery and return the results as a Pandas DataFrame.
     table_get_record(table_name, record_id, projection)
         Retrieve a specific record from a table.
-    table_get_records(table_name, query_expression, projection, page, pagesize, sort, sortdescending)
+    table_get_records(table_name, query_expression, projection, page, pagesize, sort,
+    sortdescending)
         Retrieve records from a table based on a query expression.
     table_get_record_count(table_name, query_expression)
         Retrieve the count of records from a table based on a query expression.
@@ -62,9 +69,10 @@ class API:
         self._api_connected = False
         self._pq_prefix = ''
 
-        # Define log messages for no records found and empty DataFrame
+        # Define log messages for common scenarios
         self._NO_RECORDS_LOG_MSG = 'No records found.'
         self._EMPTY_DF_LOG_MSG = 'Input DataFrame is empty. No records processed.'
+        self._API_NOT_CONNECTED_LOG_MSG = 'API not connected. Unable to perform operation.'
 
         # Check if the credentials have been loaded successfully
         if not self._credential.loaded:
@@ -116,7 +124,8 @@ class API:
         # Close the API session to release resources
         self.session.close()
 
-    # TODO: Implement conditional parsing to account for differences between PowerQuery and table request results
+    # TODO: Implement conditional parsing to account for differences between PowerQuery and table
+    #  request results
     def _access_requests_parse(self, response: Response, read_only: bool = True) -> list[str]:
         # Check if the response status code indicates a forbidden access (403)
         if response.status_code == 403:
@@ -133,8 +142,9 @@ class API:
                 # Parse the JSON response to extract access request errors
                 for error in response.json()['errors']:
                     # Format and append each access request as a Plugin XML access request string
-                    access_requests.append(f'\n<field table="{error["resource"]}" field="{error["field"]}" '
-                                           f'access="{access_level}"/>')
+                    access_requests.append(
+                            f'\n<field table="{error["resource"]}" field="{error["field"]}" '
+                            f'access="{access_level}"/>')
 
             except Exception as e:
                 # Log an error if there is an issue parsing the access requests
@@ -147,11 +157,13 @@ class API:
 
         else:
             # Log an error if the response status code is not 403
-            self._log.error(f"Response status code is not 403\n\t{response.status_code} - {response.text}")
+            self._log.error(
+                    f"Response status code is not 403\n\t{response.status_code} - {response.text}")
 
             # Return an empty list
             return []
 
+    # TODO: Implement detailed parsing of the Results object in the response
     def _response_log_status_code(self, resource: str, method: str, response: Response):
         # Log error messages based on the HTTP status code of the response
         match response.status_code:
@@ -185,11 +197,16 @@ class API:
 
             case 509:
                 # Log a resource throttling error with the resource and response text
-                self._log.error(f"Resource throttling currently in place for {resource}:\n\t{response.text}")
+                self._log.error(
+                        f"Resource throttling currently in place for {resource}:\n\t"
+                        f"{response.text}")
 
-    def _request(self, method: str, resource: str, read_only: bool = True, suppress_log: bool = False, **kwargs):
+    def _request(self, method: str, resource: str, read_only: bool = True,
+                 suppress_log: bool = False, **kwargs):
         # Send an HTTP request using the specified method and resource URL
-        response = self.session.request(method=method, url=f"{self._credential.server_address}{resource}", **kwargs)
+        response = self.session.request(method=method,
+                                        url=f"{self._credential.server_address}{resource}",
+                                        **kwargs)
 
         # Check if the response indicates forbidden access (403)
         if response.status_code == 403:
@@ -199,9 +216,11 @@ class API:
             # If there are access requests, log an error unless suppressed
             if access_requests:
                 if not suppress_log:
-                    self._log.error(f"Plugin {self._credential.plugin} doesn't have access to one or more of the "
-                                    f"requested fields.\n"
-                                    f"Access requests to add to the plugin:{''.join(access_requests)}")
+                    self._log.error(
+                            f"Plugin {self._credential.plugin} doesn't have access to one or more "
+                            f"of "
+                            f"the requested fields.\n"
+                            f"Access requests to add to the plugin:{''.join(access_requests)}")
 
                 # Attach the access requests to the response object
                 response.access_requests = access_requests
@@ -213,6 +232,7 @@ class API:
         # Return the HTTP response object
         return response
 
+    # TODO: Refactor to handle failed pq requests
     def _pq_parse_response(self, response: Response) -> pd.DataFrame:
         # Parse the JSON response from the PowerQuery API
         response_json = response.json()
@@ -224,7 +244,8 @@ class API:
 
             records = []  # List to hold parsed records
             fields = {}  # Dictionary to hold field values
-            tables = response_json['record'][0]['tables'].keys()  # Get table names from the first record
+            tables = response_json['record'][0][
+                'tables'].keys()  # Get table names from the first record
 
             # Iterate through each record in the response
             for record in response_json['record']:
@@ -259,22 +280,92 @@ class API:
             return pd.DataFrame()
 
     def _students_get_cuids(self) -> pd.DataFrame:
+        # Check if the API is connected before retrieving student client UIDs
         if not self._api_connected:
-            self._log.error("API not connected. Unable to retrieve student CUIDs.")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             return pd.DataFrame()
 
+        # Log a message indicating that student client UIDs are being retrieved
         self._log.debug('Retrieving student client UIDs')
 
+        # Backup the current PowerQuery prefix and set a new one for the student DCID ID map
         pq_prefix_backup = self._pq_prefix
         self.pq_set_prefix('com.pearson.core.student')
         cuids = self.pq_run('student_dcid_id_map')
         self.pq_set_prefix(pq_prefix_backup)
 
+        # Drop the _name column and rename the _id column to 'client_uid'
         cuids = cuids.drop('_name', axis=1).rename(columns={'_id': 'client_uid'})
 
+        # Convert the 'client_uid' column to a string for use in the update payload
+        cuids['client_uid'] = cuids['client_uid'].astype(str)
+
+        # Return the DataFrame containing student client UIDs
         return cuids
 
+    def _students_build_update_payload(self, records: pd.DataFrame) -> str:
+        # Get client UIDs for use in the update payload
+        cuids = self._students_get_cuids()
+
+        # Merge the records with the client UIDs and rename the 'dcid' column to 'id'
+        records = records.merge(cuids, on='dcid', how='left').fillna('').rename(
+                columns={'dcid': 'id'})
+
+        # Convert the 'id' column to a string
+        records['id'] = records['id'].astype(str)
+
+        # Add the 'action' column to the records DataFrame
+        records['action'] = 'UPDATE'
+
+        payload = f'{{"students":{{"student":{records.to_json(orient="records")}}}}}'
+
+        # Convert the records to a dictionary formatted for the API payload
+        # payload_dict = {
+        #     'students': {
+        #         'student': records.to_dict(orient='records')
+        #     }
+        # }
+
+        # Convert the payload dictionary to a JSON string
+        # payload_json = json.dumps(payload_dict)
+
+        # Return the JSON payload string
+        return payload
+
+    def _students_parse_response(self, response: Response) -> pd.DataFrame:
+        if response.status_code == 200:
+            response_json = response.json()
+
+            if 'results' in response_json:
+                self._log.debug(f"{response_json['results']['update_count']} records updated")
+
+                records = []
+                fields = {}
+
+                for record in response_json['results']['result']:
+                    fields.update({'client_uid': record['client_uid']})
+                    fields.update({'status': record['status']})
+                    fields.update({'action': record['action']})
+                    fields.update({'success_message_id': record['success_message']['id']})
+                    fields.update({'success_message_ref': record['success_message']['ref']})
+
+                    records.append(fields.copy())
+
+                    fields.clear()
+
+                return pd.DataFrame(records)
+
+            else:
+                self._log.debug('No records updated')
+
+                return pd.DataFrame()
+        else:
+            self._log.error('Student update failed. See above log error for details.')
+
+            return pd.DataFrame()
+
+    # TODO: Refactor to handle failed table requests
     def _table_parse_response(self, response: Response, table_name: str) -> pd.DataFrame:
         # Parse the JSON response from the API for a specific table
         response_json = response.json()
@@ -369,7 +460,7 @@ class API:
 
         # Check if the API is connected before running the PowerQuery
         if not self._api_connected:
-            self._log.error(f"PowerQuery {pq_name} not run because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -394,12 +485,14 @@ class API:
             payload = json.dumps(pq_parameters)
 
             # Send a POST request to run the PowerQuery with parameters
-            response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0",
+            response = self._request('post',
+                                     resource=f"/ws/schema/query/{full_pq_name}?pagesize=0",
                                      data=payload)
 
         else:
             # Send a POST request to run the PowerQuery without parameters
-            response = self._request('post', resource=f"/ws/schema/query/{full_pq_name}?pagesize=0")
+            response = self._request('post',
+                                     resource=f"/ws/schema/query/{full_pq_name}?pagesize=0")
 
         # Check if the request was successful
         if response.status_code == 200:
@@ -416,7 +509,8 @@ class API:
             return pd.DataFrame()
 
     # TODO: Refactor to use _table_parse_response method
-    def table_get_record(self, table_name: str, record_id: str | int, projection: str = '*') -> pd.DataFrame:
+    def table_get_record(self, table_name: str, record_id: str | int,
+                         projection: str = '*') -> pd.DataFrame:
         """
         Retrieve a specific record from a table.
 
@@ -427,7 +521,8 @@ class API:
         record_id : str or int
             The ID of the record to retrieve.
         projection : str, optional
-            A comma-separated list of fields to include in the response (default is '*' to return all fields).
+            A comma-separated list of fields to include in the response (default is '*' to return
+            all fields).
 
         Returns
         -------
@@ -439,7 +534,7 @@ class API:
 
         # Check if the API is connected before attempting to retrieve the record
         if not self._api_connected:
-            self._log.error(f"Record {record_id} not retrieved from {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -449,7 +544,8 @@ class API:
 
         # Send a GET request to retrieve the record with the specified projection
         response = self._request('get',
-                                 resource=f"/ws/schema/table/{table_name}/{record_id}?projection={projection}")
+                                 resource=f"/ws/schema/table/{table_name}/"
+                                          f"{record_id}?projection={projection}")
 
         # Check if the request was successful
         if response.status_code == 200:
@@ -472,13 +568,17 @@ class API:
 
         else:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting record from {table_name}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting record from {table_name}: {response.status_code} - "
+                    f"{response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.DataFrame()
 
-    def table_get_records(self, table_name: str, query_expression: str, projection: str = '*', page: int = 0,
-                          pagesize: int = 0, sort: str = '', sortdescending: bool = False) -> pd.DataFrame:
+    def table_get_records(self, table_name: str, query_expression: str, projection: str = '*',
+                          page: int = 0,
+                          pagesize: int = 0, sort: str = '',
+                          sortdescending: bool = False) -> pd.DataFrame:
         """
         Retrieve records from a table based on a query expression.
 
@@ -487,7 +587,8 @@ class API:
         table_name : str
             The name of the table from which to retrieve records.
         query_expression : str
-            The query expression to filter the records. Refer to the PowerSchool developer documentation for the
+            The query expression to filter the records. Refer to the PowerSchool developer
+            documentation for the
             requirements of the query expression. Documentation is located here:
             https://support.powerschool.com/developer/#/page/table-resources
         projection : str, optional
@@ -495,7 +596,8 @@ class API:
         page : int, optional
             The page number to retrieve (default is 0).
         pagesize : int, optional
-            The number of records per page (default is 0, which represents the Maximum Pagesize setting in the data
+            The number of records per page (default is 0, which represents the Maximum Pagesize
+            setting in the data
             configuration of the plugin that you are using to connect to the PowerSchool API).
         sort : str, optional
             A comma-separated list of fields by which to sort the records (default is '').
@@ -506,12 +608,13 @@ class API:
         -------
         pd.DataFrame
             A DataFrame containing the requested records.
-            Returns an empty DataFrame if the API is not connected or if there is an error during the request.
+            Returns an empty DataFrame if the API is not connected or if there is an error during
+            the request.
         """
 
         # Check if the API is connected before attempting to retrieve records
         if not self._api_connected:
-            self._log.error(f"Records not retrieved from {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -546,7 +649,9 @@ class API:
 
         else:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting records from {table_name}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting records from {table_name}: {response.status_code} - "
+                    f"{response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.DataFrame()
@@ -572,7 +677,7 @@ class API:
 
         # Check if the API is connected before attempting to retrieve the record count
         if not self._api_connected:
-            self._log.error(f"Record count not retrieved from {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return 0 if not connected
             return 0
@@ -581,7 +686,9 @@ class API:
         self._log.debug(f"Getting record count from {table_name}")
 
         # Send a GET request to retrieve the record count using the provided query expression
-        response = self._request('get', resource=f"/ws/schema/table/{table_name}/count?q={query_expression}")
+        response = self._request('get',
+                                 resource=f"/ws/schema/table/{table_name}/count?q="
+                                          f"{query_expression}")
 
         # Parse the JSON response
         response_json = response.json()
@@ -589,7 +696,9 @@ class API:
         # Check if the request was successful
         if response.status_code != 200:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting record count from {table_name}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting record count from {table_name}: "
+                    f"{response.status_code} - {response.text}")
 
             # Return 0 if the query fails
             return 0
@@ -601,7 +710,9 @@ class API:
 
         else:
             # Log a debug message if no record count was found in the response
-            self._log.debug(f"No record count found in response from {table_name} with the provided query expression")
+            self._log.debug(
+                    f"No record count found in response from {table_name} with the provided query "
+                    f"expression")
 
             # Return 0 if no count is found
             return 0
@@ -621,13 +732,15 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the results of the insert operations, including response status codes and texts.
-            Returns an empty DataFrame if the API is not connected or if the input DataFrame is empty.
+            A DataFrame containing the results of the insert operations, including response
+            status codes and texts.
+            Returns an empty DataFrame if the API is not connected or if the input DataFrame is
+            empty.
         """
 
         # Check if the API is connected before attempting to insert records
         if not self._api_connected:
-            self._log.error(f"Records not inserted into {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -657,7 +770,8 @@ class API:
             payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
             # Send a POST request to insert the record into the specified table
-            response = self._request('post', resource=f"/ws/schema/table/{table_name}", read_only=False,
+            response = self._request('post', resource=f"/ws/schema/table/{table_name}",
+                                     read_only=False,
                                      suppress_log=suppress_log, data=payload)
 
             # Suppress further logging after the first request
@@ -688,13 +802,15 @@ class API:
 
         else:
             # Log a success message if all records were inserted successfully
-            self._log.debug(f"{len(results.index)} record(s) successfully inserted into {table_name}")
+            self._log.debug(
+                    f"{len(results.index)} record(s) successfully inserted into {table_name}")
 
         # Return the results DataFrame containing the status of each insert operation
         return results
 
     # TODO: Convert columns in input DataFrame to strings before sending to API
-    def table_update_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+    def table_update_records(self, table_name: str, id_column_name: str,
+                             records: pd.DataFrame) -> pd.DataFrame:
         """
         Update multiple records in a specified table.
 
@@ -710,14 +826,15 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the results of the update operations, including response status codes and texts.
+            A DataFrame containing the results of the update operations, including response
+            status codes and texts.
             Returns an empty DataFrame if the API is not connected, if the input DataFrame is empty,
             or if the ID column is not found in the records.
         """
 
         # Check if the API is connected before attempting to update records
         if not self._api_connected:
-            self._log.error(f"Records not updated in {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -731,7 +848,8 @@ class API:
 
         # Check if the specified ID column exists in the DataFrame
         if id_column_name not in records.columns:
-            self._log.error(f"ID column '{id_column_name}' not found in records. No records updated.")
+            self._log.error(
+                    f"ID column '{id_column_name}' not found in records. No records updated.")
 
             # Return an empty DataFrame if the ID column is not found
             return pd.DataFrame()
@@ -757,7 +875,9 @@ class API:
             payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
 
             # Send a PUT request to update the record in the specified table
-            response = self._request('put', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
+            response = self._request('put',
+                                     resource=f"/ws/schema/table/{table_name}/"
+                                              f"{row[id_column_name]}",
                                      read_only=False, suppress_log=suppress_log, data=payload)
 
             suppress_log = True  # Suppress further logging after the first request
@@ -806,13 +926,14 @@ class API:
         Returns
         -------
         bool
-            True if the record was successfully deleted or not found; False if the API is not connected
+            True if the record was successfully deleted or not found; False if the API is not
+            connected
             or if there was an error during the deletion process.
         """
 
         # Check if the API is connected before attempting to delete the record
         if not self._api_connected:
-            self._log.error(f"Record {record_id} not deleted from {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return False if not connected
             return False
@@ -821,7 +942,9 @@ class API:
         self._log.debug(f"Deleting record from {table_name}")
 
         # Send a DELETE request to remove the record from the specified table
-        response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{record_id}", read_only=False)
+        response = self._request('delete',
+                                 resource=f"/ws/schema/table/{table_name}/{record_id}",
+                                 read_only=False)
 
         # Check if the request was successful (204 No Content indicates successful deletion)
         if response.status_code == 204:
@@ -841,12 +964,14 @@ class API:
             # Log an error for any other status codes that indicate failure
             elif response.status_code != 403:
                 self._log.error(
-                        f"Error deleting record from {table_name}: {response.status_code} - {response.text}")
+                        f"Error deleting record from {table_name}: {response.status_code} - "
+                        f"{response.text}")
 
                 # Return False if there was an error during deletion
                 return False
 
-    def table_delete_records(self, table_name: str, id_column_name: str, records: pd.DataFrame) -> pd.DataFrame:
+    def table_delete_records(self, table_name: str, id_column_name: str,
+                             records: pd.DataFrame) -> pd.DataFrame:
         """
         Delete multiple records from a specified table.
 
@@ -862,13 +987,15 @@ class API:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the results of the delete operations, including response status codes and texts.
-            Returns an empty DataFrame if the API is not connected or if the input DataFrame is empty.
+            A DataFrame containing the results of the delete operations, including response
+            status codes and texts.
+            Returns an empty DataFrame if the API is not connected or if the input DataFrame is
+            empty.
         """
 
         # Check if the API is connected before attempting to delete records
         if not self._api_connected:
-            self._log.error(f"Records not deleted from {table_name} because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -892,7 +1019,9 @@ class API:
             nonlocal suppress_log
 
             # Send a DELETE request to remove the record identified by the ID column
-            response = self._request('delete', resource=f"/ws/schema/table/{table_name}/{row[id_column_name]}",
+            response = self._request('delete',
+                                     resource=f"/ws/schema/table/{table_name}/"
+                                              f"{row[id_column_name]}",
                                      read_only=False, suppress_log=suppress_log)
 
             suppress_log = True  # Suppress further logging after the first request
@@ -921,7 +1050,8 @@ class API:
         # Log details about records that were not found
         if not not_found.empty:
             self._log.debug(
-                    f"Records not found in {table_name}\n{not_found.to_string(index=False, justify='left')}")
+                    f"Records not found in {table_name}\n"
+                    f"{not_found.to_string(index=False, justify='left')}")
 
         # If there are errors, log them
         if not failed.empty:
@@ -931,8 +1061,10 @@ class API:
 
         else:
             # Log success messages if all records were deleted successfully
-            self._log.debug(f"{len(results.index) - len(not_found.index)} records successfully deleted from"
-                            f" {table_name}")
+            self._log.debug(
+                    f"{len(results.index) - len(not_found.index)} records successfully deleted "
+                    f"from "
+                    f"{table_name}")
             self._log.debug(f"{len(not_found.index)} records not found in {table_name}")
 
         # Return the results DataFrame containing the status of each delete operation
@@ -960,7 +1092,7 @@ class API:
 
         # Check if the API is connected before attempting to retrieve the record
         if not self._api_connected:
-            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty DataFrame if not connected
             return pd.DataFrame()
@@ -977,7 +1109,9 @@ class API:
         for item in expansions_list:
             if not isinstance(item, str):
                 # Log an error if the expansions parameter is not a list of strings
-                self._log.error("Expansions parameter must be a list of strings or a Pandas Series of strings")
+                self._log.error(
+                        "Expansions parameter must be a list of strings or a Pandas Series of "
+                        "strings")
 
                 # Return an empty DataFrame if the expansions parameter is invalid
                 return pd.DataFrame()
@@ -996,7 +1130,9 @@ class API:
         for item in extensions_list:
             if not isinstance(item, str):
                 # Log an error if the extensions parameter is not a list of strings
-                self._log.error("Extensions parameter must be a list of strings or a Pandas Series of strings")
+                self._log.error(
+                        "Extensions parameter must be a list of strings or a Pandas Series of "
+                        "strings")
 
                 # Return an empty DataFrame if the extensions parameter is invalid
                 return pd.DataFrame()
@@ -1021,7 +1157,9 @@ class API:
         # Check if the request was successful
         if response.status_code != 200:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting student with ID {student_id}: {response.status_code} - "
+                    f"{response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.DataFrame()
@@ -1030,7 +1168,8 @@ class API:
         self._log.debug('Record found')
 
         # Return the student record as a DataFrame without the expansions and extensions columns
-        return pd.json_normalize(response.json()['student']).drop(columns=['@expansions', '@extensions'])
+        return pd.json_normalize(response.json()['student']).drop(
+                columns=['@expansions', '@extensions'])
 
     def student_get_expansions(self, student_id: int) -> pd.Series:
         """
@@ -1051,7 +1190,7 @@ class API:
 
         # Check if the API is connected before attempting to retrieve the record
         if not self._api_connected:
-            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty list if not connected
             return pd.Series()
@@ -1066,7 +1205,9 @@ class API:
         # Check if the request was successful
         if response.status_code != 200:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting student with ID {student_id}: {response.status_code} - "
+                    f"{response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.Series()
@@ -1099,7 +1240,7 @@ class API:
 
         # Check if the API is connected before attempting to retrieve the record
         if not self._api_connected:
-            self._log.error(f"Student with ID {student_id} not retrieved because the API is not connected")
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
 
             # Return an empty list if not connected
             return pd.Series()
@@ -1114,7 +1255,9 @@ class API:
         # Check if the request was successful
         if response.status_code != 200:
             # Log an error if the request was not successful
-            self._log.error(f"Error getting student with ID {student_id}: {response.status_code} - {response.text}")
+            self._log.error(
+                    f"Error getting student with ID {student_id}: {response.status_code} - "
+                    f"{response.text}")
 
             # Return an empty DataFrame if the request fails
             return pd.Series()
@@ -1127,3 +1270,77 @@ class API:
 
         # Return the extensions for the student
         return pd.Series(response_json['student']['@extensions'].split(','), name='extensions')
+
+    def students_update_email_addresses(self, email_addresses: pd.DataFrame) -> pd.DataFrame:
+        """
+        Update one or more student email addresses.
+
+        Parameters
+        ----------
+        email_addresses : pd.DataFrame
+            A DataFrame containing the student email addresses to be updated.
+            Each row should contain the student DCID and the new email address.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the results of the update operations, including response
+            status codes and texts.
+            Returns an empty DataFrame if the API is not connected, if the input DataFrame is empty,
+            or if the ID column is not found in the records.
+        """
+
+        # Check if the API is connected before attempting to update email addresses
+        if not self._api_connected:
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
+
+            # Return an empty DataFrame if not connected
+            return pd.DataFrame()
+
+        # Check if the input DataFrame is empty
+        if email_addresses.empty:
+            self._log.debug(self._EMPTY_DF_LOG_MSG)
+
+            # Return an empty DataFrame if the input DataFrame is empty
+            return pd.DataFrame()
+
+        # Check if dcid column exists in the DataFrame
+        if 'dcid' not in email_addresses.columns:
+            # Log an error if the ID column is not found in the DataFrame
+            self._log.error(
+                    "Column 'dcid' not found in input DataFrame. No email addresses updated.")
+
+            # Return an empty DataFrame if the ID column is not found
+            return pd.DataFrame()
+
+        # Check if email column exists in the DataFrame
+        if 'email' not in email_addresses.columns:
+            self._log.error(
+                    "Column 'email' not found in input DataFrame. No email addresses updated.")
+
+            # Return an empty DataFrame if the email column is not found
+            return pd.DataFrame()
+
+        # Define a function to build a contact_info dictionary for each row
+        def build_contact_info(row):
+            # Add the email address to the contact_info dictionary
+            row['contact_info'] = dict(email=row['email'])
+
+            # Return the updated row
+            return row
+
+        # Apply the build_contact_info function to each row in the DataFrame and
+        # drop the email column
+        email_addresses = email_addresses.apply(build_contact_info, axis=1).drop(columns=['email'])
+
+        # Convert the DataFrame to a JSON string for the API payload
+        payload = self._students_build_update_payload(email_addresses)
+
+        # Log the attempt to update student email addresses
+        self._log.debug('Updating student email')
+
+        # Send a POST request to update the student email addresses
+        response = self._request('post', resource='/ws/v1/student', read_only=False,
+                                 data=payload)
+
+        return self._students_parse_response(response)
