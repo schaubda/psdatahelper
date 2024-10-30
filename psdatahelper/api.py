@@ -578,7 +578,7 @@ class API:
     def table_get_records(self, table_name: str, query_expression: str, projection: str = '*',
                           page: int = 0,
                           pagesize: int = 0, sort: str = '',
-                          sortdescending: bool = False) -> pd.DataFrame:
+                          sort_descending: bool = False) -> pd.DataFrame:
         """
         Retrieve records from a table based on a query expression.
 
@@ -601,7 +601,7 @@ class API:
             configuration of the plugin that you are using to connect to the PowerSchool API).
         sort : str, optional
             A comma-separated list of fields by which to sort the records (default is '').
-        sortdescending : bool, optional
+        sort_descending : bool, optional
             Flag indicating if the sorting should be in descending order (default is False).
 
         Returns
@@ -636,7 +636,7 @@ class API:
         if sort != '':
             resource += f"&sort={sort}"
 
-            if sortdescending:
+            if sort_descending:
                 resource += "&sortdescending=true"
 
         # Send a GET request to retrieve the records
@@ -808,7 +808,6 @@ class API:
         # Return the results DataFrame containing the status of each insert operation
         return results
 
-    # TODO: Convert columns in input DataFrame to strings before sending to API
     def table_update_records(self, table_name: str, id_column_name: str,
                              records: pd.DataFrame) -> pd.DataFrame:
         """
@@ -821,7 +820,8 @@ class API:
         id_column_name : str
             The name of the column that contains the unique identifier for each record.
         records : pd.DataFrame
-            A DataFrame containing the records to be updated. Each row represents a record.
+            A DataFrame containing the records to be updated.
+            Each row represents a record.
 
         Returns
         -------
@@ -858,7 +858,7 @@ class API:
         self._log.debug(f"Updating records in {table_name}")
 
         # Fill any NaN values in the DataFrame with empty strings
-        records = records.fillna('')
+        records = records.fillna('').astype(str)
 
         access_requests_needed = False  # Flag to track if access requests are needed
         suppress_log = False  # Flag to suppress logging for specific cases
@@ -885,6 +885,125 @@ class API:
             # Check if access requests are needed based on the response status code
             if response.status_code == 403 and not access_requests_needed:
                 access_requests_needed = True
+
+            # Store the response status code and text in the row for tracking
+            row['response_status_code'] = response.status_code
+            row['response_text'] = response.text
+
+            # Return the updated row
+            return row
+
+        # Apply the update_records function to each row in the DataFrame
+        results = records.apply(update_records, axis=1)
+
+        # Identify rows where the response status code indicates failure (not 200)
+        errors = results.loc[results['response_status_code'] != 200]
+
+        # If there are errors, log them
+        if not errors.empty:
+            if not access_requests_needed:
+                self._log.error(f"Errors updating records in {table_name}\n"
+                                f"{errors.to_string(index=False, justify='left')}")
+
+        else:
+            # Log a success message if all records were updated successfully
+            self._log.debug(f"{len(results.index)} records successfully updated in {table_name}")
+
+        # Return the results DataFrame containing the status of each update operation
+        return results
+
+    def table_update_records_with_insert(self, table_name: str, id_column_name: str,
+                                         fk_column_name: str,
+                                         records: pd.DataFrame) -> pd.DataFrame:
+        """
+        Update multiple records in a specified table.
+
+        Parameters
+        ----------
+        table_name : str
+            The name of the table in which records will be updated.
+        id_column_name : str
+            The name of the column that contains the unique identifier for each record.
+        fk_column_name : str
+            The name of the column that contains the foreign key for each record.
+        records : pd.DataFrame
+            A DataFrame containing the records to be updated.
+            Each row represents a record.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the results of the update operations, including response
+            status codes and texts.
+            Returns an empty DataFrame if the API is not connected, if the input DataFrame is empty,
+            or if the ID column is not found in the records.
+        """
+
+        # Check if the API is connected before attempting to update records
+        if not self._api_connected:
+            self._log.error(self._API_NOT_CONNECTED_LOG_MSG)
+
+            # Return an empty DataFrame if not connected
+            return pd.DataFrame()
+
+        # Check if the input DataFrame is empty
+        if records.empty:
+            self._log.debug(self._EMPTY_DF_LOG_MSG)
+
+            # Return an empty DataFrame if the input DataFrame is empty
+            return pd.DataFrame()
+
+        # Check if the specified ID column exists in the DataFrame
+        if id_column_name not in records.columns:
+            self._log.error(
+                    f"ID column '{id_column_name}' not found in records. No records updated.")
+
+            # Return an empty DataFrame if the ID column is not found
+            return pd.DataFrame()
+
+        # Log the attempt to update records in the specified table
+        self._log.debug(f"Updating records in {table_name}")
+
+        # Fill any NaN values in the DataFrame with empty strings
+        records = records.fillna('').astype(str)
+
+        access_requests_needed = False  # Flag to track if access requests are needed
+        suppress_log = False  # Flag to suppress logging for specific cases
+
+        # Define a function to update a single record
+        def update_records(row):
+            nonlocal access_requests_needed
+            nonlocal suppress_log
+
+            # Convert the row to JSON format, excluding the ID column
+            row_json = row.drop(id_column_name).to_json()
+
+            # Create the payload for the API request with the correct formatting
+            payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
+
+            # Send a PUT request to update the record in the specified table
+            response = self._request('put',
+                                     resource=f"/ws/schema/table/{table_name}/"
+                                              f"{row[id_column_name]}",
+                                     read_only=False, suppress_log=suppress_log, data=payload)
+
+            # Check if access requests are needed based on the response status code
+            if response.status_code == 403 and not access_requests_needed:
+                access_requests_needed = True
+
+            # If the record was not found, attempt to insert it
+            if response.status_code == 404:
+                # If the ID column name is the same as the foreign key column name, add that column
+                # back to the payload
+                if id_column_name == fk_column_name:
+                    row_json = row.to_json()
+                    payload = f'{{"tables":{{"{table_name}":{row_json}}}}}'
+
+                response = self._request('post', resource=f"/ws/schema/table/{table_name}",
+                                         read_only=False, suppress_log=suppress_log, data=payload)
+
+            # Suppress further logging after the first request
+            suppress_log = True
 
             # Store the response status code and text in the row for tracking
             row['response_status_code'] = response.status_code
